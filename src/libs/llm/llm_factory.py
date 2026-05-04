@@ -8,6 +8,7 @@ from core.settings import Settings
 from libs.llm.azure_llm import AzureLLM
 from libs.llm.base_llm import BaseLLM
 from libs.llm.deepseek_llm import DeepSeekLLM
+from libs.llm.ollama_llm import OllamaLLM
 from libs.llm.openai_llm import OpenAILLM
 from libs.llm.qwen_llm import QwenLLM
 
@@ -27,6 +28,7 @@ class LLMFactory:
         "azure": AzureLLM,
         "deepseek": DeepSeekLLM,
         "qwen": QwenLLM,
+        "ollama": OllamaLLM,
     }
     _providers: dict[str, type[BaseLLM]] = dict(_default_providers)
 
