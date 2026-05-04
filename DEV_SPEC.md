@@ -1967,7 +1967,7 @@ dashboard:
 | B6 | Evaluator 抽象接口与工厂 | [x] | 2026-05-04 | BaseEvaluator + EvaluatorFactory + CustomEvaluator + 11 个单元测试 |
 | B7.1 | OpenAI-Compatible LLM 实现 | [x] | 2026-05-04 | OpenAI/Azure/DeepSeek LLM + mock HTTP 冒烟测试 |
 | B7.2 | Ollama LLM 实现 | [x] | 2026-05-04 | Ollama LLM + 工厂注册 + mock HTTP 测试 |
-| B7.3 | OpenAI & Azure Embedding 实现 | [ ] | | |
+| B7.3 | OpenAI/Azure/Qwen Embedding 实现 | [x] | 2026-05-04 | OpenAI/Azure/Qwen Embedding + 工厂注册 + mock HTTP 测试 |
 | B7.4 | Ollama Embedding 实现 | [ ] | | |
 | B7.5 | Recursive Splitter 默认实现 | [ ] | | |
 | B7.6 | ChromaStore 默认实现 | [ ] | | |
@@ -2235,17 +2235,19 @@ dashboard:
   - 在连接失败/超时等场景下，抛出可读错误且不泄露敏感配置。
 - **测试方法**：`pytest -q tests/unit/test_ollama_llm.py`。
 
-### B7.3：OpenAI & Azure Embedding 实现
-- **目标**：补齐 `openai_embedding.py` 和 `azure_embedding.py`，支持 OpenAI 官方 API 和 Azure OpenAI 服务的 Embedding 调用，支持批量 `embed(texts)`，并可被 mock 测试。
+### B7.3：OpenAI/Azure/Qwen Embedding 实现
+- **目标**：补齐 `openai_embedding.py`、`azure_embedding.py` 和 `qwen_embedding.py`，支持 OpenAI 官方 API、Azure OpenAI 服务与 Qwen DashScope OpenAI-compatible Embedding 调用，支持批量 `embed(texts)`，并可被 mock 测试。
 - **修改文件**：
   - `src/libs/embedding/openai_embedding.py`
   - `src/libs/embedding/azure_embedding.py`
-  - `tests/unit/test_embedding_providers_smoke.py`（mock HTTP，包含 OpenAI 和 Azure 测试用例）
+  - `src/libs/embedding/qwen_embedding.py`
+  - `tests/unit/test_embedding_providers_smoke.py`（mock HTTP，包含 OpenAI、Azure 和 Qwen 测试用例）
 - **验收标准**：
   - provider=openai 时 `EmbeddingFactory` 可创建，支持 OpenAI 官方 API 的 text-embedding-3-small/large 等模型。
   - provider=azure 时 `EmbeddingFactory` 可创建，正确处理 Azure 特有的 endpoint、api-version、api-key 配置，支持 Azure 部署的 text-embedding-ada-002 等模型。
+  - provider=qwen 时 `EmbeddingFactory` 可创建，默认使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`，兼容 DashScope 的 OpenAI-compatible Embedding 接口。
   - 空输入、超长输入有明确行为（报错或截断策略由配置决定）。
-  - Azure 实现复用 OpenAI Embedding 的核心逻辑，保持行为一致性。
+  - Azure 与 Qwen 实现复用 OpenAI Embedding 的核心逻辑，保持行为一致性。
 - **测试方法**：`pytest -q tests/unit/test_embedding_providers_smoke.py`。
 
 ### B7.4：Ollama Embedding 实现

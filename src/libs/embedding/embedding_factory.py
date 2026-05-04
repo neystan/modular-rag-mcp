@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any, TypeVar
 
 from core.settings import Settings
+from libs.embedding.azure_embedding import AzureEmbedding
 from libs.embedding.base_embedding import BaseEmbedding
+from libs.embedding.openai_embedding import OpenAIEmbedding
+from libs.embedding.qwen_embedding import QwenEmbedding
 
 
 class EmbeddingFactoryError(ValueError):
@@ -18,7 +21,12 @@ EmbeddingType = TypeVar("EmbeddingType", bound=BaseEmbedding)
 class EmbeddingFactory:
     """按配置创建 Embedding Provider。"""
 
-    _providers: dict[str, type[BaseEmbedding]] = {}
+    _default_providers: dict[str, type[BaseEmbedding]] = {
+        "openai": OpenAIEmbedding,
+        "azure": AzureEmbedding,
+        "qwen": QwenEmbedding,
+    }
+    _providers: dict[str, type[BaseEmbedding]] = dict(_default_providers)
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[EmbeddingType]) -> None:
@@ -52,9 +60,9 @@ class EmbeddingFactory:
 
     @classmethod
     def clear_providers(cls) -> None:
-        """清空 Provider 注册表，主要用于测试隔离。"""
+        """重置 Provider 注册表，保留默认实现。"""
 
-        cls._providers.clear()
+        cls._providers = dict(cls._default_providers)
 
     @staticmethod
     def _extract_embedding_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
