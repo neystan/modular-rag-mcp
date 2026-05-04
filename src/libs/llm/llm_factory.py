@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any, TypeVar
 
 from core.settings import Settings
+from libs.llm.azure_llm import AzureLLM
 from libs.llm.base_llm import BaseLLM
+from libs.llm.deepseek_llm import DeepSeekLLM
+from libs.llm.openai_llm import OpenAILLM
 
 
 class LLMFactoryError(ValueError):
@@ -18,7 +21,12 @@ LLMType = TypeVar("LLMType", bound=BaseLLM)
 class LLMFactory:
     """按配置创建 LLM Provider。"""
 
-    _providers: dict[str, type[BaseLLM]] = {}
+    _default_providers: dict[str, type[BaseLLM]] = {
+        "openai": OpenAILLM,
+        "azure": AzureLLM,
+        "deepseek": DeepSeekLLM,
+    }
+    _providers: dict[str, type[BaseLLM]] = dict(_default_providers)
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[LLMType]) -> None:
@@ -52,9 +60,9 @@ class LLMFactory:
 
     @classmethod
     def clear_providers(cls) -> None:
-        """清空 Provider 注册表，主要用于测试隔离。"""
+        """重置 Provider 注册表，保留默认实现。"""
 
-        cls._providers.clear()
+        cls._providers = dict(cls._default_providers)
 
     @staticmethod
     def _extract_llm_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
