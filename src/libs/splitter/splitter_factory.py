@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 from core.settings import Settings
 from libs.splitter.base_splitter import BaseSplitter
+from libs.splitter.recursive_splitter import RecursiveSplitter
 
 
 class SplitterFactoryError(ValueError):
@@ -18,7 +19,10 @@ SplitterType = TypeVar("SplitterType", bound=BaseSplitter)
 class SplitterFactory:
     """按配置创建 Splitter Provider。"""
 
-    _providers: dict[str, type[BaseSplitter]] = {}
+    _default_providers: dict[str, type[BaseSplitter]] = {
+        "recursive": RecursiveSplitter,
+    }
+    _providers: dict[str, type[BaseSplitter]] = dict(_default_providers)
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[SplitterType]) -> None:
@@ -52,9 +56,9 @@ class SplitterFactory:
 
     @classmethod
     def clear_providers(cls) -> None:
-        """清空 Provider 注册表，主要用于测试隔离。"""
+        """重置 Provider 注册表，保留默认实现。"""
 
-        cls._providers.clear()
+        cls._providers = dict(cls._default_providers)
 
     @staticmethod
     def _extract_splitter_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
