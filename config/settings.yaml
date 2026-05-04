@@ -1,0 +1,36 @@
+app:
+  name: modular-rag-mcp
+  environment: local
+
+llm:
+  provider: placeholder
+  model: placeholder
+
+embedding:
+  provider: placeholder
+  model: placeholder
+
+splitter:
+  provider: placeholder
+  chunk_size: 1000
+  chunk_overlap: 200
+
+vector_store:
+  provider: placeholder
+  collection: default
+
+retrieval:
+  top_k: 5
+  mode: hybrid
+
+rerank:
+  provider: none
+  top_k: 5
+
+evaluation:
+  provider: custom
+  enabled: false
+
+observability:
+  log_level: INFO
+  log_file: logs/app.log

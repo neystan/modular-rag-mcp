@@ -1,0 +1,33 @@
+[project]
+name = "modular-rag-mcp"
+version = "0.1.0"
+description = "Modular RAG MCP Server"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0.3",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+markers = [
+    "unit: unit tests for isolated modules",
+    "integration: integration tests for component interactions",
+    "e2e: end-to-end tests for user workflows",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
