@@ -85,6 +85,7 @@ Quick-check predecessor artifacts exist (file-level only). On mismatch, log a wa
    - 自动代码编写时，新增代码注释使用中文；仅在逻辑不直观处添加简洁注释
    - 自动代码编写时，新生成的 Markdown (`.md`) 文档使用中文，除非用户明确要求其他语言
    - 提交到 GitHub 的 commit message 使用任务标识格式，例如 `update b6`、`update b7`
+   - LLM provider 支持 Qwen/DashScope：配置 provider 使用 `qwen`，默认 base_url 为 `https://dashscope.aliyuncs.com/compatible-mode/v1`
 
 5. **Write tests** alongside code:
    - Place in `tests/unit/` or `tests/integration/` per spec

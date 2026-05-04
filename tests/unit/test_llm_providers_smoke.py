@@ -13,6 +13,7 @@ from libs.llm.base_llm import ChatMessage
 from libs.llm.deepseek_llm import DeepSeekLLM
 from libs.llm.llm_factory import LLMFactory
 from libs.llm.openai_llm import LLMProviderError, OpenAILLM
+from libs.llm.qwen_llm import QwenLLM
 
 
 class FakeHTTPResponse:
@@ -56,6 +57,7 @@ def test_factory_routes_openai_compatible_providers() -> None:
     assert isinstance(LLMFactory.create(make_settings("openai")), OpenAILLM)
     assert isinstance(LLMFactory.create(make_settings("azure")), AzureLLM)
     assert isinstance(LLMFactory.create(make_settings("deepseek")), DeepSeekLLM)
+    assert isinstance(LLMFactory.create(make_settings("qwen")), QwenLLM)
 
 
 def test_openai_chat_posts_expected_payload(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -129,3 +131,21 @@ def test_response_shape_error_mentions_provider(monkeypatch: pytest.MonkeyPatch)
 
     with pytest.raises(LLMProviderError, match="openai response error"):
         llm.chat([{"role": "user", "content": "hi"}])
+
+
+def test_qwen_uses_dashscope_compatible_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeHTTPResponse:
+        captured["url"] = request.full_url
+        captured["headers"] = dict(request.header_items())
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeHTTPResponse({"choices": [{"message": {"content": "Qwen 回答"}}]})
+
+    monkeypatch.setattr("libs.llm.openai_llm.urlopen", fake_urlopen)
+    llm = QwenLLM({"model": "qwen-plus", "api_key": "dashscope-secret"})
+
+    assert llm.chat([{"role": "user", "content": "你好"}]) == "Qwen 回答"
+    assert captured["url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer dashscope-secret"
+    assert captured["payload"]["model"] == "qwen-plus"
