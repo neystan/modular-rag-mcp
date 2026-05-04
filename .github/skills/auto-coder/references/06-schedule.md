@@ -74,7 +74,7 @@
 | C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord） | [x] | 2026-05-05 | Document/Chunk/ChunkRecord + metadata.images 契约 + 序列化测试 |
 | C2 | 文件完整性检查（SHA256） | [x] | 2026-05-05 | SQLiteIntegrityChecker + SHA256 + WAL 并发写入测试 |
 | C3 | Loader 抽象基类与 PDF Loader | [x] | 2026-05-05 | BaseLoader + PdfLoader + 文本/图片契约测试 |
-| C4 | Splitter 集成（调用 Libs） | [ ] | | |
+| C4 | Splitter 集成（调用 Libs） | [x] | 2026-05-05 | DocumentChunker + 稳定 Chunk ID + 图片引用按需分发测试 |
 | C5 | Transform 基类 + ChunkRefiner | [ ] | | |
 | C6 | MetadataEnricher | [ ] | | |
 | C7 | ImageCaptioner | [ ] | | |
@@ -159,14 +159,14 @@
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 17 | 17 | 100% |
-| 阶段 C | 15 | 3 | 20% |
+| 阶段 C | 15 | 4 | 27% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **23** | **33%** |
+| **总计** | **69** | **24** | **35%** |
 
 ---
 
