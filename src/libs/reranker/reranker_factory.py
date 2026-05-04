@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 from core.settings import Settings
 from libs.reranker.base_reranker import BaseReranker, NoneReranker
+from libs.reranker.llm_reranker import LLMReranker
 
 
 class RerankerFactoryError(ValueError):
@@ -18,7 +19,10 @@ RerankerType = TypeVar("RerankerType", bound=BaseReranker)
 class RerankerFactory:
     """按配置创建 Reranker Provider。"""
 
-    _providers: dict[str, type[BaseReranker]] = {"none": NoneReranker}
+    _providers: dict[str, type[BaseReranker]] = {
+        "none": NoneReranker,
+        "llm": LLMReranker,
+    }
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[RerankerType]) -> None:
@@ -52,9 +56,9 @@ class RerankerFactory:
 
     @classmethod
     def clear_providers(cls) -> None:
-        """重置 Provider 注册表，保留 none 回退实现。"""
+        """重置 Provider 注册表，保留默认实现。"""
 
-        cls._providers = {"none": NoneReranker}
+        cls._providers = {"none": NoneReranker, "llm": LLMReranker}
 
     @staticmethod
     def _extract_rerank_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
