@@ -1,6 +1,8 @@
-"""递归切分默认实现。"""
+"""基于 LangChain 的递归切分默认实现。"""
 
 from __future__ import annotations
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from libs.splitter.base_splitter import BaseSplitter
 
@@ -21,6 +23,13 @@ class RecursiveSplitter(BaseSplitter):
         if chunk_overlap >= chunk_size:
             raise ValueError("recursive splitter config error: chunk_overlap must be smaller than chunk_size")
 
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""],
+            keep_separator=True,
+        )
+
         chunks: list[str] = []
         for block in self._split_markdown_blocks(text):
             stripped_block = block.strip()
@@ -29,7 +38,7 @@ class RecursiveSplitter(BaseSplitter):
             if self._is_code_block(stripped_block):
                 chunks.append(stripped_block)
                 continue
-            chunks.extend(self._split_prose_block(stripped_block, chunk_size, chunk_overlap))
+            chunks.extend(part.strip() for part in splitter.split_text(stripped_block) if part.strip())
         return chunks
 
     def _split_markdown_blocks(self, text: str) -> list[str]:
@@ -72,39 +81,3 @@ class RecursiveSplitter(BaseSplitter):
     def _is_code_block(block: str) -> bool:
         lines = block.splitlines()
         return bool(lines) and lines[0].lstrip().startswith("```")
-
-    def _split_prose_block(self, text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
-        if len(text) <= chunk_size:
-            return [text]
-
-        chunks: list[str] = []
-        remaining = text
-        separators = ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
-
-        while len(remaining) > chunk_size:
-            split_at = self._find_split_index(remaining, chunk_size, separators)
-            chunk = remaining[:split_at].strip()
-            if not chunk:
-                split_at = chunk_size
-                chunk = remaining[:split_at].strip()
-            chunks.append(chunk)
-
-            next_start = max(0, split_at - chunk_overlap)
-            overlap_prefix = remaining[next_start:split_at]
-            if chunk_overlap > 0 and overlap_prefix.strip():
-                remaining = (overlap_prefix + remaining[split_at:]).strip()
-            else:
-                remaining = remaining[split_at:].strip()
-
-        if remaining:
-            chunks.append(remaining)
-        return chunks
-
-    def _find_split_index(self, text: str, chunk_size: int, separators: list[str]) -> int:
-        for separator in separators:
-            if not separator:
-                continue
-            index = text.rfind(separator, 0, chunk_size + 1)
-            if index > 0:
-                return index
-        return chunk_size
