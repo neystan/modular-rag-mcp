@@ -65,6 +65,7 @@
 | B7.8 | Cross-Encoder Reranker 实现 | [x] | 2026-05-04 | CrossEncoderReranker + fallback 信号 + mock scorer 测试 |
 | B8 | Vision LLM 抽象接口与工厂集成 | [x] | 2026-05-04 | BaseVisionLLM + create_vision_llm + 工厂测试 |
 | B9 | Azure Vision LLM 实现 | [x] | 2026-05-05 | AzureVisionLLM + 图片压缩/base64 支持 + mock HTTP 测试 |
+| B10 | Qwen Vision LLM 实现 | [x] | 2026-05-05 | QwenVisionLLM + DashScope 兼容接口 + mock HTTP 测试 |
 
 #### 阶段 C：Ingestion Pipeline MVP
 
@@ -157,7 +158,7 @@
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 16 | 16 | 100% |
+| 阶段 B | 17 | 17 | 100% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
@@ -165,7 +166,7 @@
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **68** | **19** | **28%** |
+| **总计** | **69** | **20** | **29%** |
 
 ---
 
@@ -425,6 +426,24 @@
   - API 调用失败时抛出清晰错误，包含 Azure 特有错误码。
   - mock 测试覆盖：正常调用、图片压缩、超时、认证失败等场景。
 - **测试方法**：`pytest -q tests/unit/test_azure_vision_llm.py`。
+
+### B10：Qwen Vision LLM 实现
+- **目标**：实现 `QwenVisionLLM`，支持通过 DashScope OpenAI-compatible 接口调用 `qwen-vl-max` 等视觉模型进行图像理解。
+- **修改文件**：
+  - `src/libs/llm/qwen_vision_llm.py`
+  - `src/libs/llm/llm_factory.py`（注册默认 `qwen` vision provider）
+  - `tests/unit/test_qwen_vision_llm.py`（mock HTTP，不走真实 API）
+- **实现类/函数**：
+  - `QwenVisionLLM(BaseVisionLLM)`：实现 `chat_with_image` 方法
+  - 支持 Qwen 特有配置：`base_url`, `model`, `api_key`, `max_image_size`
+- **验收标准**：
+  - provider=qwen 且配置 vision_llm 时，`LLMFactory.create_vision_llm()` 可创建 Qwen Vision LLM 实例。
+  - 默认使用 DashScope OpenAI-compatible 地址 `https://dashscope.aliyuncs.com/compatible-mode/v1`。
+  - 支持图片路径和 base64 两种输入方式。
+  - 图片过大时自动压缩至 `max_image_size` 配置的尺寸（默认2048px）。
+  - API 调用失败时抛出清晰错误，包含 DashScope 返回的错误码。
+  - mock 测试覆盖：正常调用、图片压缩、认证失败等场景。
+- **测试方法**：`pytest -q tests/unit/test_qwen_vision_llm.py`。
 
 ---
 

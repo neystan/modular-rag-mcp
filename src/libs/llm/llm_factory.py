@@ -13,6 +13,7 @@ from libs.llm.deepseek_llm import DeepSeekLLM
 from libs.llm.ollama_llm import OllamaLLM
 from libs.llm.openai_llm import OpenAILLM
 from libs.llm.qwen_llm import QwenLLM
+from libs.llm.qwen_vision_llm import QwenVisionLLM
 
 
 class LLMFactoryError(ValueError):
@@ -36,6 +37,7 @@ class LLMFactory:
     _providers: dict[str, type[BaseLLM]] = dict(_default_providers)
     _default_vision_providers: dict[str, type[BaseVisionLLM]] = {
         "azure": AzureVisionLLM,
+        "qwen": QwenVisionLLM,
     }
     _vision_providers: dict[str, type[BaseVisionLLM]] = dict(_default_vision_providers)
 
