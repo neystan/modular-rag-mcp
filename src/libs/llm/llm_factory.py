@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 from core.settings import Settings
 from libs.llm.azure_llm import AzureLLM
 from libs.llm.base_llm import BaseLLM
+from libs.llm.base_vision_llm import BaseVisionLLM
 from libs.llm.deepseek_llm import DeepSeekLLM
 from libs.llm.ollama_llm import OllamaLLM
 from libs.llm.openai_llm import OpenAILLM
@@ -18,6 +19,7 @@ class LLMFactoryError(ValueError):
 
 
 LLMType = TypeVar("LLMType", bound=BaseLLM)
+VisionLLMType = TypeVar("VisionLLMType", bound=BaseVisionLLM)
 
 
 class LLMFactory:
@@ -31,6 +33,8 @@ class LLMFactory:
         "ollama": OllamaLLM,
     }
     _providers: dict[str, type[BaseLLM]] = dict(_default_providers)
+    _default_vision_providers: dict[str, type[BaseVisionLLM]] = {}
+    _vision_providers: dict[str, type[BaseVisionLLM]] = dict(_default_vision_providers)
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[LLMType]) -> None:
@@ -63,10 +67,41 @@ class LLMFactory:
         return provider_cls(llm_config)
 
     @classmethod
+    def register_vision_provider(cls, name: str, provider_cls: type[VisionLLMType]) -> None:
+        """注册一个 Vision LLM Provider 实现。"""
+
+        normalized_name = name.strip().lower()
+        if not normalized_name:
+            raise LLMFactoryError("Vision LLM provider 名称不能为空")
+        if not issubclass(provider_cls, BaseVisionLLM):
+            raise LLMFactoryError("Vision LLM provider 必须继承 BaseVisionLLM")
+        cls._vision_providers[normalized_name] = provider_cls
+
+    @classmethod
+    def create_vision_llm(cls, settings: Settings | dict[str, Any]) -> BaseVisionLLM:
+        """根据 Settings 或 dict 配置创建 Vision LLM 实例。"""
+
+        vision_config = cls._extract_vision_llm_config(settings)
+        provider = vision_config.get("provider")
+        if not provider:
+            raise LLMFactoryError("缺少配置项: vision_llm.provider")
+
+        provider_name = str(provider).strip().lower()
+        provider_cls = cls._vision_providers.get(provider_name)
+        if provider_cls is None:
+            available = ", ".join(sorted(cls._vision_providers)) or "none"
+            raise LLMFactoryError(
+                f"未知 Vision LLM provider: {provider_name}; available providers: {available}"
+            )
+
+        return provider_cls(vision_config)
+
+    @classmethod
     def clear_providers(cls) -> None:
         """重置 Provider 注册表，保留默认实现。"""
 
         cls._providers = dict(cls._default_providers)
+        cls._vision_providers = dict(cls._default_vision_providers)
 
     @staticmethod
     def _extract_llm_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
@@ -79,3 +114,15 @@ class LLMFactory:
         if not isinstance(llm_config, dict):
             raise LLMFactoryError("配置项必须是 mapping/object: llm")
         return dict(llm_config)
+
+    @staticmethod
+    def _extract_vision_llm_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
+        if isinstance(settings, Settings):
+            return dict(settings.vision_llm)
+        if not isinstance(settings, dict):
+            raise LLMFactoryError("settings 必须是 Settings 或 dict")
+
+        vision_config = settings.get("vision_llm", settings)
+        if not isinstance(vision_config, dict):
+            raise LLMFactoryError("配置项必须是 mapping/object: vision_llm")
+        return dict(vision_config)

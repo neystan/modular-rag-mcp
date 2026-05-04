@@ -1973,7 +1973,7 @@ dashboard:
 | B7.6 | ChromaStore 默认实现 | [x] | 2026-05-04 | ChromaStore + 工厂注册 + roundtrip 集成测试 |
 | B7.7 | LLM Reranker 实现 | [x] | 2026-05-04 | LLMReranker + prompt 读取 + mock LLM 测试 |
 | B7.8 | Cross-Encoder Reranker 实现 | [x] | 2026-05-04 | CrossEncoderReranker + fallback 信号 + mock scorer 测试 |
-| B8 | Vision LLM 抽象接口与工厂集成 | [ ] | | |
+| B8 | Vision LLM 抽象接口与工厂集成 | [x] | 2026-05-04 | BaseVisionLLM + create_vision_llm + 工厂测试 |
 | B9 | Azure Vision LLM 实现 | [ ] | | |
 
 #### 阶段 C：Ingestion Pipeline MVP

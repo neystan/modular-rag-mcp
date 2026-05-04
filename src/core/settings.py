@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ class Settings:
     rerank: dict[str, Any]
     evaluation: dict[str, Any]
     observability: dict[str, Any]
+    vision_llm: dict[str, Any] = field(default_factory=dict)
 
 
 REQUIRED_SECTIONS = (
@@ -73,6 +74,7 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
     settings = Settings(
         app=_section(raw_data, "app"),
         llm=_section(raw_data, "llm"),
+        vision_llm=_section(raw_data, "vision_llm"),
         embedding=_section(raw_data, "embedding"),
         splitter=_section(raw_data, "splitter"),
         vector_store=_section(raw_data, "vector_store"),
@@ -91,6 +93,7 @@ def validate_settings(settings: Settings) -> None:
     data = {
         "app": settings.app,
         "llm": settings.llm,
+        "vision_llm": settings.vision_llm,
         "embedding": settings.embedding,
         "splitter": settings.splitter,
         "vector_store": settings.vector_store,
