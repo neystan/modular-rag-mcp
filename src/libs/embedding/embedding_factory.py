@@ -8,6 +8,7 @@ from core.settings import Settings
 from libs.embedding.azure_embedding import AzureEmbedding
 from libs.embedding.base_embedding import BaseEmbedding
 from libs.embedding.openai_embedding import OpenAIEmbedding
+from libs.embedding.ollama_embedding import OllamaEmbedding
 from libs.embedding.qwen_embedding import QwenEmbedding
 
 
@@ -25,6 +26,7 @@ class EmbeddingFactory:
         "openai": OpenAIEmbedding,
         "azure": AzureEmbedding,
         "qwen": QwenEmbedding,
+        "ollama": OllamaEmbedding,
     }
     _providers: dict[str, type[BaseEmbedding]] = dict(_default_providers)
 

@@ -58,7 +58,7 @@
 | B7.1 | OpenAI-Compatible LLM 实现 | [x] | 2026-05-04 | OpenAI/Azure/DeepSeek LLM + mock HTTP 冒烟测试 |
 | B7.2 | Ollama LLM 实现 | [x] | 2026-05-04 | Ollama LLM + 工厂注册 + mock HTTP 测试 |
 | B7.3 | OpenAI/Azure/Qwen Embedding 实现 | [x] | 2026-05-04 | OpenAI/Azure/Qwen Embedding + 工厂注册 + mock HTTP 测试 |
-| B7.4 | Ollama Embedding 实现 | [ ] | | |
+| B7.4 | Ollama Embedding 实现 | [x] | 2026-05-04 | Ollama Embedding + 工厂注册 + mock HTTP 测试 |
 | B7.5 | Recursive Splitter 默认实现 | [ ] | | |
 | B7.6 | ChromaStore 默认实现 | [ ] | | |
 | B7.7 | LLM Reranker 实现 | [ ] | | |
