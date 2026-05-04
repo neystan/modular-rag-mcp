@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 from core.settings import Settings
 from libs.vector_store.base_vector_store import BaseVectorStore
+from libs.vector_store.chroma_store import ChromaStore
 
 
 class VectorStoreFactoryError(ValueError):
@@ -18,7 +19,10 @@ VectorStoreType = TypeVar("VectorStoreType", bound=BaseVectorStore)
 class VectorStoreFactory:
     """按配置创建 VectorStore Provider。"""
 
-    _providers: dict[str, type[BaseVectorStore]] = {}
+    _default_providers: dict[str, type[BaseVectorStore]] = {
+        "chroma": ChromaStore,
+    }
+    _providers: dict[str, type[BaseVectorStore]] = dict(_default_providers)
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[VectorStoreType]) -> None:
@@ -52,9 +56,9 @@ class VectorStoreFactory:
 
     @classmethod
     def clear_providers(cls) -> None:
-        """清空 Provider 注册表，主要用于测试隔离。"""
+        """重置 Provider 注册表，保留默认实现。"""
 
-        cls._providers.clear()
+        cls._providers = dict(cls._default_providers)
 
     @staticmethod
     def _extract_vector_store_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
