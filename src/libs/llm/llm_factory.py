@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 from core.settings import Settings
 from libs.llm.azure_llm import AzureLLM
+from libs.llm.azure_vision_llm import AzureVisionLLM
 from libs.llm.base_llm import BaseLLM
 from libs.llm.base_vision_llm import BaseVisionLLM
 from libs.llm.deepseek_llm import DeepSeekLLM
@@ -33,7 +34,9 @@ class LLMFactory:
         "ollama": OllamaLLM,
     }
     _providers: dict[str, type[BaseLLM]] = dict(_default_providers)
-    _default_vision_providers: dict[str, type[BaseVisionLLM]] = {}
+    _default_vision_providers: dict[str, type[BaseVisionLLM]] = {
+        "azure": AzureVisionLLM,
+    }
     _vision_providers: dict[str, type[BaseVisionLLM]] = dict(_default_vision_providers)
 
     @classmethod

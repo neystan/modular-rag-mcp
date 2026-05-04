@@ -64,7 +64,7 @@
 | B7.7 | LLM Reranker 实现 | [x] | 2026-05-04 | LLMReranker + prompt 读取 + mock LLM 测试 |
 | B7.8 | Cross-Encoder Reranker 实现 | [x] | 2026-05-04 | CrossEncoderReranker + fallback 信号 + mock scorer 测试 |
 | B8 | Vision LLM 抽象接口与工厂集成 | [x] | 2026-05-04 | BaseVisionLLM + create_vision_llm + 工厂测试 |
-| B9 | Azure Vision LLM 实现 | [ ] | | |
+| B9 | Azure Vision LLM 实现 | [x] | 2026-05-05 | AzureVisionLLM + 图片压缩/base64 支持 + mock HTTP 测试 |
 
 #### 阶段 C：Ingestion Pipeline MVP
 
@@ -157,7 +157,7 @@
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 16 | 15 | 94% |
+| 阶段 B | 16 | 16 | 100% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
@@ -165,7 +165,7 @@
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **68** | **18** | **26%** |
+| **总计** | **68** | **19** | **28%** |
 
 ---
 
