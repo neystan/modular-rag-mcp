@@ -58,6 +58,70 @@ def detect_chapters(content: str) -> List[Chapter]:
     return chapters
 
 
+PHASE_KEYS = tuple("ABCDEFGHI")
+
+
+def update_overall_progress(content: str) -> str:
+    phase_stats = _collect_phase_stats(content)
+    progress_table = _build_progress_table(phase_stats)
+    pattern = re.compile(r"### 📈 总体进度\s*\n\s*\n\| 阶段 .*?\n\s*\n---", re.DOTALL)
+    match = pattern.search(content)
+    if not match:
+        return content
+    replacement = f"### 📈 总体进度\n\n{progress_table}\n\n---"
+    return content[:match.start()] + replacement + content[match.end():]
+
+
+def _collect_phase_stats(content: str) -> list[tuple[str, int, int]]:
+    stats: list[tuple[str, int, int]] = []
+    for phase_key in PHASE_KEYS:
+        pattern = re.compile(
+            rf"#### 阶段 {phase_key}：.*?\n\n\| 任务编号 .*?(?=\n#### 阶段 [A-I]：|\n---|\Z)",
+            re.DOTALL,
+        )
+        match = pattern.search(content)
+        if not match:
+            continue
+
+        phase_block = match.group(0)
+        task_matches = re.findall(
+            rf"^\|\s*{phase_key}[0-9.]+\s*\|.*?\|\s*\[([ x~])\]\s*\|",
+            phase_block,
+            re.MULTILINE,
+        )
+        total = len(task_matches)
+        completed = sum(1 for status in task_matches if status == "x")
+        stats.append((phase_key, total, completed))
+    return stats
+
+
+def _build_progress_table(phase_stats: list[tuple[str, int, int]]) -> str:
+    lines = [
+        "| 阶段 | 总任务数 | 已完成 | 进度 |",
+        "|------|---------|--------|------|",
+    ]
+
+    total_tasks = 0
+    total_completed = 0
+    for phase_key, phase_total, phase_completed in phase_stats:
+        total_tasks += phase_total
+        total_completed += phase_completed
+        lines.append(
+            f"| 阶段 {phase_key} | {phase_total} | {phase_completed} | {_format_progress(phase_completed, phase_total)} |"
+        )
+
+    lines.append(
+        f"| **总计** | **{total_tasks}** | **{total_completed}** | **{_format_progress(total_completed, total_tasks)}** |"
+    )
+    return "\n".join(lines)
+
+
+def _format_progress(completed: int, total: int) -> str:
+    if total <= 0:
+        return "0%"
+    return f"{round(completed / total * 100)}%"
+
+
 def sync(force: bool = False):
     skill_dir = Path(__file__).parent.parent          # auto-coder/
     repo_root = skill_dir.parent.parent.parent        # project root
@@ -68,12 +132,17 @@ def sync(force: bool = False):
     if not dev_spec.exists():
         print(f"ERROR: {dev_spec} not found"); sys.exit(1)
 
+    original_content = dev_spec.read_text(encoding='utf-8')
+    normalized_content = update_overall_progress(original_content)
+    if normalized_content != original_content:
+        dev_spec.write_text(normalized_content, encoding='utf-8')
+
     # Hash check
-    current_hash = hashlib.sha256(dev_spec.read_bytes()).hexdigest()
+    current_hash = hashlib.sha256(normalized_content.encode('utf-8')).hexdigest()
     if not force and hash_file.exists() and hash_file.read_text().strip() == current_hash:
         print("specs up-to-date"); return
 
-    content = dev_spec.read_text(encoding='utf-8')
+    content = normalized_content
     chapters = detect_chapters(content)
     lines = content.split('\n')
 
