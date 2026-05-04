@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 from core.settings import Settings
 from libs.reranker.base_reranker import BaseReranker, NoneReranker
+from libs.reranker.cross_encoder_reranker import CrossEncoderReranker
 from libs.reranker.llm_reranker import LLMReranker
 
 
@@ -22,6 +23,7 @@ class RerankerFactory:
     _providers: dict[str, type[BaseReranker]] = {
         "none": NoneReranker,
         "llm": LLMReranker,
+        "cross_encoder": CrossEncoderReranker,
     }
 
     @classmethod
@@ -59,6 +61,7 @@ class RerankerFactory:
         """重置 Provider 注册表，保留默认实现。"""
 
         cls._providers = {"none": NoneReranker, "llm": LLMReranker}
+        cls._providers["cross_encoder"] = CrossEncoderReranker
 
     @staticmethod
     def _extract_rerank_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:
