@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -104,3 +105,41 @@ def test_missing_dense_vector_raises_error() -> None:
 
     with pytest.raises(VectorUpserterError, match="missing dense_vector"):
         upserter.upsert([record])
+
+
+def test_complex_metadata_is_sanitized_for_vector_store_only() -> None:
+    vector_store = FakeVectorStore()
+    upserter = VectorUpserter(make_settings(), vector_store=vector_store)
+    record = ChunkRecord(
+        id="temp-complex",
+        text="body",
+        metadata={
+            "source_path": "docs/sample.pdf",
+            "chunk_index": 3,
+            "image_refs": ["img-1", "img-2"],
+            "images": [
+                {
+                    "id": "img-1",
+                    "path": "data/images/img-1.png",
+                    "page": 1,
+                    "text_offset": 0,
+                    "text_length": 14,
+                    "position": {"x": 12},
+                }
+            ],
+            "image_captions": [{"image_id": "img-1", "caption": "流程图"}],
+            "extra": {"owner": "pipeline"},
+        },
+        dense_vector=[0.1, 0.2, 0.3],
+    )
+
+    result = upserter.upsert([record])[0]
+    stored = next(iter(vector_store.records.values()))
+
+    assert result.metadata["images"][0]["id"] == "img-1"
+    assert result.metadata["image_captions"][0]["caption"] == "流程图"
+    assert result.metadata["extra"]["owner"] == "pipeline"
+    assert stored.metadata["image_refs"] == ["img-1", "img-2"]
+    assert json.loads(stored.metadata["images"])[0]["id"] == "img-1"
+    assert json.loads(stored.metadata["image_captions"])[0]["caption"] == "流程图"
+    assert json.loads(stored.metadata["extra"])["owner"] == "pipeline"

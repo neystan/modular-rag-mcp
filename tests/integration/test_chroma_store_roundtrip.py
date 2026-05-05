@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from core.settings import Settings
+from core.types import ChunkRecord
+from ingestion.storage.vector_upserter import VectorUpserter
 from libs.vector_store.base_vector_store import VectorRecord
 from libs.vector_store.chroma_store import ChromaStore
 from libs.vector_store.vector_store_factory import VectorStoreFactory
@@ -91,3 +94,38 @@ def test_chroma_persists_records_across_instances(tmp_path: Path) -> None:
 
     assert [item.id for item in results] == ["doc-persisted"]
     assert results[0].text == "持久化文档"
+
+
+def test_vector_upserter_sanitizes_complex_metadata_for_chroma(tmp_path: Path) -> None:
+    store = ChromaStore({"collection": "complex-meta", "persist_path": str(tmp_path / "db")})
+    upserter = VectorUpserter(make_settings(tmp_path / "db"), vector_store=store)
+    record = ChunkRecord(
+        id="temp-1",
+        text="图文块内容",
+        metadata={
+            "source_path": "docs/complex.pdf",
+            "chunk_index": 0,
+            "collection": "test_collection",
+            "images": [
+                {
+                    "id": "img-1",
+                    "path": "data/images/img-1.png",
+                    "page": 1,
+                    "text_offset": 0,
+                    "text_length": 14,
+                    "position": {},
+                }
+            ],
+            "image_refs": ["img-1"],
+        },
+        dense_vector=[0.2, 0.8],
+    )
+
+    updated = upserter.upsert([record])
+    results = store.query([0.2, 0.8], top_k=1, filters={"collection": "test_collection"})
+
+    assert len(updated) == 1
+    assert len(results) == 1
+    assert results[0].id == updated[0].id
+    assert json.loads(results[0].metadata["images"])[0]["id"] == "img-1"
+    assert results[0].metadata["image_refs"] == ["img-1"]

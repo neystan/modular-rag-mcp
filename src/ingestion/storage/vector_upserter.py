@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from typing import Any
 
 from core.settings import Settings
@@ -40,6 +41,7 @@ class VectorUpserter:
             stable_id = self._generate_stable_id(record)
             metadata = copy.deepcopy(record.metadata)
             metadata["chunk_id"] = stable_id
+            store_metadata = self._sanitize_metadata_for_store(metadata)
 
             dense_vector = record.dense_vector
             if not dense_vector:
@@ -50,7 +52,7 @@ class VectorUpserter:
                     id=stable_id,
                     vector=dense_vector,
                     text=record.text,
-                    metadata=metadata,
+                    metadata=store_metadata,
                 )
             )
             updated_records.append(
@@ -91,3 +93,44 @@ class VectorUpserter:
     @staticmethod
     def _resolve_vector_store(settings: Settings | dict[str, Any]) -> BaseVectorStore:
         return VectorStoreFactory.create(settings)
+
+    @classmethod
+    def _sanitize_metadata_for_store(cls, metadata: dict[str, Any]) -> dict[str, Any]:
+        sanitized: dict[str, Any] = {}
+        for key, value in metadata.items():
+            sanitized[key] = cls._sanitize_metadata_value(value)
+        return sanitized
+
+    @classmethod
+    def _sanitize_metadata_value(cls, value: Any) -> Any:
+        if isinstance(value, (str, bool, int, float)) or value is None:
+            return value
+
+        if isinstance(value, list):
+            if cls._is_store_scalar_list(value):
+                return list(value)
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+        if isinstance(value, tuple):
+            if cls._is_store_scalar_list(list(value)):
+                return list(value)
+            return json.dumps(list(value), ensure_ascii=False, sort_keys=True)
+
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+        return str(value)
+
+    @staticmethod
+    def _is_store_scalar_list(values: list[Any]) -> bool:
+        if not values:
+            return True
+
+        first_type = type(values[0])
+        if first_type not in {str, bool, int, float}:
+            return False
+
+        for value in values:
+            if type(value) is not first_type:
+                return False
+        return True
