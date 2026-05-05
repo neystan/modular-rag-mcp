@@ -1409,6 +1409,7 @@ smart-knowledge-hub/
 │   └── prompts/                         # Prompt 模板目录
 │       ├── image_captioning.txt         # 图片描述生成 Prompt
 │       ├── chunk_refinement.txt         # Chunk 重写 Prompt
+│       ├── metadata_enrichment.txt      # 元数据增强 Prompt
 │       └── rerank.txt                   # LLM Rerank Prompt
 │
 ├── src/                                 # 源代码主目录
@@ -1986,7 +1987,7 @@ dashboard:
 | C3 | Loader 抽象基类与 PDF Loader | [x] | 2026-05-05 | BaseLoader + PdfLoader + 文本/图片契约测试 |
 | C4 | Splitter 集成（调用 Libs） | [x] | 2026-05-05 | DocumentChunker + 稳定 Chunk ID + 图片引用按需分发测试 |
 | C5 | Transform 基类 + ChunkRefiner | [x] | 2026-05-05 | BaseTransform + ChunkRefiner + TraceContext + 真实 Qwen 集成测试 |
-| C6 | MetadataEnricher | [ ] | | |
+| C6 | MetadataEnricher | [x] | 2026-05-05 | 规则增强 + LLM JSON 增强 + 降级回退 + Qwen 集成测试 |
 | C7 | ImageCaptioner | [ ] | | |
 | C8 | DenseEncoder | [ ] | | |
 | C9 | SparseEncoder | [ ] | | |
@@ -2069,14 +2070,14 @@ dashboard:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 17 | 17 | 100% |
-| 阶段 C | 15 | 5 | 33% |
+| 阶段 C | 15 | 6 | 40% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **25** | **36%** |
+| **总计** | **69** | **26** | **38%** |
 
 ---
 
@@ -2093,6 +2094,7 @@ dashboard:
   - `config/settings.yaml`（最小可解析配置）
   - `config/prompts/image_captioning.txt`（可先放占位内容，后续阶段补充 Prompt）
   - `config/prompts/chunk_refinement.txt`（可先放占位内容，后续阶段补充 Prompt）
+  - `config/prompts/metadata_enrichment.txt`（可先放占位内容，后续阶段补充 Prompt）
   - `config/prompts/rerank.txt`（可先放占位内容，后续阶段补充 Prompt）
 - **实现类/函数**：无（仅骨架）。
 - **实现类/函数**：无（仅骨架，不实现业务逻辑）。
@@ -2553,6 +2555,7 @@ dashboard:
 - **修改文件**：
   - `src/ingestion/transform/image_captioner.py`
   - `config/prompts/image_captioning.txt`（作为默认 prompt 来源；可在测试中注入替代文本）
+  - `config/prompts/metadata_enrichment.txt`（作为默认 prompt 来源；可在测试中注入替代文本）
   - `tests/unit/test_image_captioner_fallback.py`
 - **验收标准**：
   - 启用模式：存在 image_refs 时会生成 caption 并写入 metadata（测试中用 mock Vision LLM 断言调用与输出）。

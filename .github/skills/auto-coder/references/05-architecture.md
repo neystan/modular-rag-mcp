@@ -152,6 +152,7 @@ smart-knowledge-hub/
 │   └── prompts/                         # Prompt 模板目录
 │       ├── image_captioning.txt         # 图片描述生成 Prompt
 │       ├── chunk_refinement.txt         # Chunk 重写 Prompt
+│       ├── metadata_enrichment.txt      # 元数据增强 Prompt
 │       └── rerank.txt                   # LLM Rerank Prompt
 │
 ├── src/                                 # 源代码主目录
