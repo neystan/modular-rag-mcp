@@ -8,6 +8,10 @@ llm:
   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
   api_key: sk-5d87f40486954f53bed85f3383eb95d0
 
+vision_llm:
+  provider: placeholder
+  model: placeholder
+
 embedding:
   provider: placeholder
   model: placeholder
@@ -42,3 +46,5 @@ ingestion:
     use_llm: true
   metadata_enricher:
     use_llm: true
+  image_captioner:
+    use_vision_llm: false
