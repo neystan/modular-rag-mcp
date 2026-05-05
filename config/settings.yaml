@@ -3,15 +3,16 @@ app:
   environment: local
 
 llm:
-  provider: placeholder
-  model: placeholder
+  provider: qwen
+  model: qwen3.5-plus-2026-02-15
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
 
 embedding:
   provider: placeholder
   model: placeholder
 
 splitter:
-  provider: placeholder
+  provider: recursive
   chunk_size: 1000
   chunk_overlap: 200
 
@@ -34,3 +35,7 @@ evaluation:
 observability:
   log_level: INFO
   log_file: logs/app.log
+
+ingestion:
+  chunk_refiner:
+    use_llm: true

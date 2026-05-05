@@ -1,0 +1,50 @@
+[
+  {
+    "name": "typical_noise_scenario",
+    "input": "Header: Product Manual\n\nPage 1 of 8\n\n核心内容开始。\n\nFooter: Confidential",
+    "expected_contains": ["核心内容开始。"],
+    "expected_absent": ["Header:", "Page 1 of 8", "Footer:"]
+  },
+  {
+    "name": "ocr_errors",
+    "input": "This    is   OCR   text\n\nwith     noisy   spacing.",
+    "expected_contains": ["This is OCR text", "with noisy spacing."],
+    "expected_absent": ["    "]
+  },
+  {
+    "name": "page_header_footer",
+    "input": "Header: Quarterly Report\nRevenue increased.\n2 / 12\nFooter: Internal",
+    "expected_contains": ["Revenue increased."],
+    "expected_absent": ["Header:", "2 / 12", "Footer:"]
+  },
+  {
+    "name": "excessive_whitespace",
+    "input": "alpha\n\n\n\nbeta\n\n\ngamma",
+    "expected_contains": ["alpha\n\nbeta\n\ngamma"],
+    "expected_absent": ["\n\n\n"]
+  },
+  {
+    "name": "format_markers",
+    "input": "<!-- remove me -->\nUseful line\n------",
+    "expected_contains": ["Useful line"],
+    "expected_absent": ["remove me", "------"]
+  },
+  {
+    "name": "clean_text",
+    "input": "This is already clean.\nIt should mostly stay the same.",
+    "expected_contains": ["This is already clean.", "It should mostly stay the same."],
+    "expected_absent": []
+  },
+  {
+    "name": "code_blocks",
+    "input": "Header: Code Sample\n```python\ndef hello():\n    print(\"world\")\n```\nPage 3 of 9",
+    "expected_contains": ["```python\ndef hello():\n    print(\"world\")\n```"],
+    "expected_absent": ["Header:", "Page 3 of 9"]
+  },
+  {
+    "name": "mixed_noise",
+    "input": "Header: API Doc\n\n<!--note-->\nfield    description\n\n***\nFooter: Draft",
+    "expected_contains": ["field description"],
+    "expected_absent": ["Header:", "<!--note-->", "***", "Footer:"]
+  }
+]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import pytest
@@ -149,3 +150,18 @@ def test_qwen_uses_dashscope_compatible_base_url(monkeypatch: pytest.MonkeyPatch
     assert captured["url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer dashscope-secret"
     assert captured["payload"]["model"] == "qwen-plus"
+
+
+def test_qwen_falls_back_to_dashscope_env_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeHTTPResponse:
+        captured["headers"] = dict(request.header_items())
+        return FakeHTTPResponse({"choices": [{"message": {"content": "Qwen 回答"}}]})
+
+    monkeypatch.setattr("libs.llm.openai_llm.urlopen", fake_urlopen)
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "dashscope-from-env")
+    llm = QwenLLM({"model": "qwen-plus"})
+
+    assert llm.chat([{"role": "user", "content": "你好"}]) == "Qwen 回答"
+    assert captured["headers"]["Authorization"] == "Bearer dashscope-from-env"

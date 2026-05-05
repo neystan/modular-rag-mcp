@@ -26,6 +26,7 @@ class Settings:
     rerank: dict[str, Any]
     evaluation: dict[str, Any]
     observability: dict[str, Any]
+    ingestion: dict[str, Any] = field(default_factory=dict)
     vision_llm: dict[str, Any] = field(default_factory=dict)
 
 
@@ -82,6 +83,7 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         rerank=_section(raw_data, "rerank"),
         evaluation=_section(raw_data, "evaluation"),
         observability=_section(raw_data, "observability"),
+        ingestion=_section(raw_data, "ingestion"),
     )
     validate_settings(settings)
     return settings
@@ -101,6 +103,7 @@ def validate_settings(settings: Settings) -> None:
         "rerank": settings.rerank,
         "evaluation": settings.evaluation,
         "observability": settings.observability,
+        "ingestion": settings.ingestion,
     }
 
     for section in REQUIRED_SECTIONS:

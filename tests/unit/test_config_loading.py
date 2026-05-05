@@ -40,6 +40,7 @@ def test_load_settings_from_yaml(tmp_path: Path) -> None:
     assert isinstance(settings, Settings)
     assert settings.app["name"] == "modular-rag-mcp"
     assert settings.embedding["provider"] == "placeholder"
+    assert settings.ingestion == {}
 
 
 def test_load_settings_reports_missing_field_path(tmp_path: Path) -> None:
@@ -73,3 +74,20 @@ def test_validate_settings_rejects_missing_required_section() -> None:
 def test_load_settings_rejects_missing_file(tmp_path: Path) -> None:
     with pytest.raises(SettingsError, match="配置文件不存在"):
         load_settings(tmp_path / "missing.yaml")
+
+
+def test_load_settings_accepts_optional_ingestion_section(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text(
+        VALID_CONFIG
+        + """
+ingestion:
+  chunk_refiner:
+    use_llm: true
+""",
+        encoding="utf-8",
+    )
+
+    settings = load_settings(config_path)
+
+    assert settings.ingestion["chunk_refiner"]["use_llm"] is True
