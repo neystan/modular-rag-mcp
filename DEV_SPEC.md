@@ -1990,7 +1990,7 @@ dashboard:
 | C6 | MetadataEnricher | [x] | 2026-05-05 | 规则增强 + LLM JSON 增强 + 降级回退 + Qwen 集成测试 |
 | C7 | ImageCaptioner | [x] | 2026-05-05 | Vision LLM caption 注入 + 文本回写 + 失败降级 |
 | C8 | DenseEncoder | [x] | 2026-05-05 | Chunk -> ChunkRecord 稠密向量编码 + 维度校验 |
-| C9 | SparseEncoder | [ ] | | |
+| C9 | SparseEncoder | [x] | 2026-05-05 | BM25 前置 term weights 编码 + 空文本处理 |
 | C10 | BatchProcessor | [ ] | | |
 | C11 | BM25Indexer（倒排索引+IDF计算） | [ ] | | |
 | C12 | VectorUpserter（幂等upsert） | [ ] | | |
@@ -2070,14 +2070,14 @@ dashboard:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 17 | 17 | 100% |
-| 阶段 C | 15 | 8 | 53% |
+| 阶段 C | 15 | 9 | 60% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **28** | **41%** |
+| **总计** | **69** | **29** | **42%** |
 
 ---
 
