@@ -47,6 +47,8 @@ startxref
 %%EOF
 """
 
+FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "sample_documents"
+
 
 class FakeImage:
     def __init__(self, name: str, data: bytes) -> None:
@@ -153,3 +155,18 @@ def test_pdf_loader_rejects_missing_and_non_pdf_files(tmp_path: Path) -> None:
     text_path.write_text("not pdf", encoding="utf-8")
     with pytest.raises(LoaderError, match="unsupported file type"):
         loader.load(text_path)
+
+
+def test_pdf_loader_loads_repository_fixture_documents(tmp_path: Path) -> None:
+    loader = PdfLoader(image_root=tmp_path / "images")
+
+    simple = loader.load(FIXTURE_DIR / "simple.pdf")
+    complex_doc = loader.load(FIXTURE_DIR / "complex_technical_doc.pdf")
+    with_images = loader.load(FIXTURE_DIR / "with_images.pdf")
+
+    assert "Simple Modular RAG Fixture" in simple.text
+    assert simple.metadata["images"] == []
+    assert "## 1. System Overview" in complex_doc.text
+    assert len(complex_doc.metadata["images"]) == 3
+    assert "PDF With Images Fixture" in with_images.text
+    assert len(with_images.metadata["images"]) == 1

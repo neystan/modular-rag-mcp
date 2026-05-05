@@ -10,10 +10,13 @@ import pytest
 from core.settings import Settings
 from core.trace import TraceContext
 from core.types import Chunk, ChunkRecord, Document
+from ingestion.chunking.document_chunker import DocumentChunker
 from ingestion.pipeline import IngestionPipeline, IngestionPipelineError
 from ingestion.storage.bm25_indexer import BM25Indexer
 from ingestion.storage.image_storage import ImageStorage
 from ingestion.storage.vector_upserter import VectorUpserter
+from libs.loader.pdf_loader import PdfLoader
+from libs.splitter.base_splitter import BaseSplitter
 from libs.vector_store.base_vector_store import BaseVectorStore, VectorRecord, VectorQueryResult
 
 
@@ -97,6 +100,12 @@ class FakeChunker:
         ]
 
 
+class PassThroughSplitter(BaseSplitter):
+    def split_text(self, text: str, trace: Any | None = None) -> list[str]:
+        stripped = text.strip()
+        return [stripped] if stripped else []
+
+
 class IdentityTransform:
     def transform(self, chunks: list[Chunk], trace: Any | None = None) -> list[Chunk]:
         return chunks
@@ -166,6 +175,9 @@ def make_settings() -> Settings:
     )
 
 
+FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "sample_documents"
+
+
 def test_pipeline_runs_end_to_end_with_injected_dependencies(tmp_path: Path) -> None:
     source_pdf = tmp_path / "simple.pdf"
     source_pdf.write_bytes(b"%PDF-1.4 fake")
@@ -227,3 +239,34 @@ def test_pipeline_wraps_stage_failures_and_marks_failed(tmp_path: Path) -> None:
 
     assert integrity.failed_calls[0]["file_hash"] == "hash-123"
     assert "loader.load failed: loader boom" in integrity.failed_calls[0]["error_msg"]
+
+
+def test_pipeline_processes_repository_complex_fixture_with_real_pdf_loader(tmp_path: Path) -> None:
+    source_pdf = FIXTURE_DIR / "complex_technical_doc.pdf"
+    integrity = FakeIntegrityChecker()
+    vector_store = FakeVectorStore()
+    image_storage = ImageStorage(tmp_path / "images", tmp_path / "db" / "image_index.db")
+    pipeline = IngestionPipeline(
+        make_settings(),
+        integrity_checker=integrity,
+        loader=PdfLoader(image_root=tmp_path / "loader-images"),
+        chunker=DocumentChunker(make_settings(), splitter=PassThroughSplitter({})),
+        transforms=[IdentityTransform()],
+        batch_processor=FakeBatchProcessor(),
+        bm25_indexer=BM25Indexer(tmp_path / "db" / "bm25"),
+        vector_upserter=VectorUpserter(make_settings(), vector_store=vector_store),
+        image_storage=image_storage,
+    )
+
+    result = pipeline.run(source_pdf, collection="fixture-tech-docs", trace=TraceContext())
+
+    assert result.skipped is False
+    assert result.document is not None
+    assert "## 1. System Overview" in result.document.text
+    assert result.image_count == 3
+    assert len(result.chunks) == 1
+    assert len(result.vector_records) == 1
+    stored_images = image_storage.list_images("fixture-tech-docs", result.document.id)
+    assert len(stored_images) == 3
+    assert all(Path(item["file_path"]).exists() for item in stored_images)
+    assert (tmp_path / "db" / "bm25" / "bm25_index.pkl").exists()
