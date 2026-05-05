@@ -77,7 +77,7 @@
 | C4 | Splitter 集成（调用 Libs） | [x] | 2026-05-05 | DocumentChunker + 稳定 Chunk ID + 图片引用按需分发测试 |
 | C5 | Transform 基类 + ChunkRefiner | [x] | 2026-05-05 | BaseTransform + ChunkRefiner + TraceContext + 真实 Qwen 集成测试 |
 | C6 | MetadataEnricher | [x] | 2026-05-05 | 规则增强 + LLM JSON 增强 + 降级回退 + Qwen 集成测试 |
-| C7 | ImageCaptioner | [ ] | | |
+| C7 | ImageCaptioner | [x] | 2026-05-05 | Vision LLM caption 注入 + 文本回写 + 失败降级 |
 | C8 | DenseEncoder | [ ] | | |
 | C9 | SparseEncoder | [ ] | | |
 | C10 | BatchProcessor | [ ] | | |
@@ -159,14 +159,14 @@
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 17 | 17 | 100% |
-| 阶段 C | 15 | 6 | 40% |
+| 阶段 C | 15 | 7 | 47% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **26** | **38%** |
+| **总计** | **69** | **27** | **39%** |
 
 ---
 
