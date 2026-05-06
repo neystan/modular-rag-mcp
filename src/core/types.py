@@ -188,6 +188,41 @@ class ChunkRecord:
         )
 
 
+@dataclass(slots=True)
+class RetrievalResult:
+    """统一检索结果契约。"""
+
+    chunk_id: str
+    score: float
+    text: str
+    metadata: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        self.chunk_id = _require_non_empty_str(self.chunk_id, "chunk_id")
+        if not isinstance(self.score, (int, float)):
+            raise TypeError("score must be number")
+        self.score = float(self.score)
+        self.text = _require_str(self.text, "text")
+        self.metadata = _normalize_metadata(self.metadata)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "chunk_id": self.chunk_id,
+            "score": self.score,
+            "text": self.text,
+            "metadata": _clone_metadata(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "RetrievalResult":
+        return cls(
+            chunk_id=data["chunk_id"],
+            score=data["score"],
+            text=data["text"],
+            metadata=data["metadata"],
+        )
+
+
 def make_image_placeholder(image_id: str) -> str:
     """生成文档内图片占位符。"""
 
