@@ -9,12 +9,19 @@ llm:
   api_key: sk-5d87f40486954f53bed85f3383eb95d0
 
 vision_llm:
-  provider: placeholder
-  model: placeholder
+  provider: qwen
+  model: qwen3.5-plus
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key: sk-5d87f40486954f53bed85f3383eb95d0
+  timeout: 30
 
 embedding:
-  provider: placeholder
-  model: placeholder
+  provider: qwen
+  model: text-embedding-v4
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key: sk-5d87f40486954f53bed85f3383eb95d0
+  timeout: 30
+  dimensions: 1024
 
 splitter:
   provider: recursive
@@ -22,8 +29,9 @@ splitter:
   chunk_overlap: 200
 
 vector_store:
-  provider: placeholder
+  provider: chroma
   collection: default
+  persist_path: data/db/chroma
 
 retrieval:
   top_k: 5
