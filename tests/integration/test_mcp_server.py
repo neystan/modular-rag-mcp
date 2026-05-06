@@ -6,6 +6,10 @@ import json
 import subprocess
 from pathlib import Path
 
+from core.types import RetrievalResult
+from mcp_server.protocol_handler import ProtocolHandler
+from mcp_server.tools.query_knowledge_hub import build_query_knowledge_hub_tool
+
 
 def _write_message(stdin: object, payload: dict[str, object]) -> None:
     assert stdin is not None
@@ -110,3 +114,64 @@ def test_server_returns_method_not_found_for_unknown_request() -> None:
     assert response["jsonrpc"] == "2.0"
     assert response["id"] == 99
     assert response["error"]["code"] == -32601
+
+
+def test_query_knowledge_hub_tool_returns_markdown_and_structured_citations() -> None:
+    def fake_executor(query: str, top_k: int, collection: str | None) -> list[RetrievalResult]:
+        assert query == "azure config"
+        assert top_k == 2
+        assert collection == "manuals"
+        return [
+            RetrievalResult(
+                chunk_id="chunk-a",
+                score=0.91,
+                text="Azure OpenAI can be configured with endpoint and api key.",
+                metadata={"source_path": "docs/azure.pdf", "page": 4},
+            )
+        ]
+
+    handler = ProtocolHandler(tools=[build_query_knowledge_hub_tool(executor=fake_executor)])
+
+    response = handler.handle_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "query_knowledge_hub",
+                "arguments": {
+                    "query": "azure config",
+                    "top_k": 2,
+                    "collection": "manuals",
+                },
+            },
+        }
+    )
+
+    result = response["result"]
+    assert result["content"][0]["type"] == "text"
+    assert "[1]" in result["content"][0]["text"]
+    assert result["structuredContent"]["citations"][0]["source"] == "docs/azure.pdf"
+    assert result["structuredContent"]["citations"][0]["page"] == 4
+
+
+def test_query_knowledge_hub_tool_returns_friendly_empty_state() -> None:
+    handler = ProtocolHandler(tools=[build_query_knowledge_hub_tool(executor=lambda q, k, c: [])])
+
+    response = handler.handle_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+                "name": "query_knowledge_hub",
+                "arguments": {
+                    "query": "unknown topic",
+                },
+            },
+        }
+    )
+
+    result = response["result"]
+    assert "未找到与“unknown topic”相关的文档" in result["content"][0]["text"]
+    assert result["structuredContent"]["citations"] == []

@@ -105,7 +105,7 @@
 |---------|---------|------|---------|------|
 | E1 | MCP Server 入口与 Stdio 约束 | [x] | 2026-05-06 | stdio initialize 握手 + stderr 日志 + 子进程测试 |
 | E2 | Protocol Handler 协议解析与能力协商 | [x] | 2026-05-06 | initialize/tools/list/tools/call + JSON-RPC 错误处理 |
-| E3 | query_knowledge_hub Tool | [ ] | | |
+| E3 | query_knowledge_hub Tool | [x] | 2026-05-06 | Markdown 响应 + structured citations + tool 集成 |
 | E4 | list_collections Tool | [ ] | | |
 | E5 | get_document_summary Tool | [ ] | | |
 | E6 | 多模态返回组装（Text + Image） | [ ] | | |
@@ -161,12 +161,12 @@
 | 阶段 B | 17 | 17 | 100% |
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
-| 阶段 E | 6 | 2 | 33% |
+| 阶段 E | 6 | 3 | 50% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **44** | **64%** |
+| **总计** | **69** | **45** | **65%** |
 
 ---
 

@@ -58,7 +58,7 @@ class ProtocolHandler:
         if method == "initialize":
             try:
                 result = self.handle_initialize(params)
-            except ProtocolHandlerError as exc:
+            except (ProtocolHandlerError, ValueError, TypeError) as exc:
                 return self._error_response(request_id, JsonRpcError(-32602, str(exc)))
             return self._success_response(request_id, result)
         if method == "tools/list":
@@ -67,7 +67,7 @@ class ProtocolHandler:
         if method == "tools/call":
             try:
                 result = self._handle_tools_call_params(params)
-            except ProtocolHandlerError as exc:
+            except (ProtocolHandlerError, ValueError, TypeError) as exc:
                 return self._error_response(request_id, JsonRpcError(-32602, str(exc)))
             except Exception:  # noqa: BLE001
                 return self._error_response(request_id, JsonRpcError(-32603, "Internal error"))
