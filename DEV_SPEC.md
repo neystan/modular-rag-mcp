@@ -2006,7 +2006,7 @@ dashboard:
 | D2 | DenseRetriever（调用 VectorStore.query） | [x] | 2026-05-06 | Query embedding + VectorStore 检索编排 |
 | D3 | SparseRetriever（BM25 查询） | [x] | 2026-05-06 | BM25 命中 + 向量库按 ID 回查 |
 | D4 | RRF Fusion | [x] | 2026-05-06 | 可配置 k 的 Reciprocal Rank Fusion |
-| D5 | HybridSearch 编排 | [ ] | | |
+| D5 | HybridSearch 编排 | [x] | 2026-05-06 | 双路召回编排 + 融合 + 过滤兜底 |
 | D6 | Reranker（Core 层编排 + Fallback） | [ ] | | |
 | D7 | 脚本入口 query.py（查询可用） | [ ] | | |
 
@@ -2071,13 +2071,13 @@ dashboard:
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 17 | 17 | 100% |
 | 阶段 C | 15 | 15 | 100% |
-| 阶段 D | 7 | 4 | 57% |
+| 阶段 D | 7 | 5 | 71% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **39** | **57%** |
+| **总计** | **69** | **40** | **58%** |
 
 ---
 
