@@ -4,23 +4,11 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass
 from typing import Any, BinaryIO
 
 from core.settings import SettingsError, load_settings
+from mcp_server.protocol_handler import ProtocolHandler
 from observability.logger import get_logger
-
-
-JSONRPC_VERSION = "2.0"
-MCP_PROTOCOL_VERSION = "2025-06-18"
-
-
-@dataclass(slots=True)
-class JsonRpcError:
-    """最小 JSON-RPC 错误对象。"""
-
-    code: int
-    message: str
 
 
 class McpServer:
@@ -31,11 +19,13 @@ class McpServer:
         stdin: BinaryIO | None = None,
         stdout: BinaryIO | None = None,
         stderr: BinaryIO | None = None,
+        protocol_handler: ProtocolHandler | None = None,
     ) -> None:
         self.stdin = stdin or sys.stdin.buffer
         self.stdout = stdout or sys.stdout.buffer
         self.stderr = stderr or sys.stderr.buffer
         self.logger = get_logger(__name__)
+        self.protocol_handler = protocol_handler or ProtocolHandler()
 
     def serve_forever(self) -> int:
         """循环读取并处理 MCP 消息，直到 EOF。"""
@@ -52,32 +42,16 @@ class McpServer:
 
     def _handle_message(self, message: dict[str, Any]) -> dict[str, Any] | None:
         method = message.get("method")
-        request_id = message.get("id")
-
-        if not isinstance(method, str) or not method.strip():
-            return self._error_response(request_id, JsonRpcError(-32600, "Invalid Request"))
-
         if method == "initialize":
             self.logger.info("handled initialize request")
-            return self._success_response(
-                request_id,
-                {
-                    "protocolVersion": MCP_PROTOCOL_VERSION,
-                    "serverInfo": {
-                        "name": "modular-rag-mcp",
-                        "version": "0.1.0",
-                    },
-                    "capabilities": {
-                        "tools": {},
-                    },
-                },
-            )
-
-        if method == "initialized":
+        elif method == "initialized":
             self.logger.info("received initialized notification")
-            return None
+        elif method == "tools/list":
+            self.logger.info("handled tools/list request")
+        elif method == "tools/call":
+            self.logger.info("handled tools/call request")
 
-        return self._error_response(request_id, JsonRpcError(-32601, f"Method not found: {method}"))
+        return self.protocol_handler.handle_message(message)
 
     def _read_message(self) -> dict[str, Any] | None:
         headers: dict[str, str] = {}
@@ -114,26 +88,6 @@ class McpServer:
         self.stdout.write(header)
         self.stdout.write(body)
         self.stdout.flush()
-
-    @staticmethod
-    def _success_response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "jsonrpc": JSONRPC_VERSION,
-            "id": request_id,
-            "result": result,
-        }
-
-    @staticmethod
-    def _error_response(request_id: Any, error: JsonRpcError) -> dict[str, Any]:
-        return {
-            "jsonrpc": JSONRPC_VERSION,
-            "id": request_id,
-            "error": {
-                "code": error.code,
-                "message": error.message,
-            },
-        }
-
 
 def main() -> None:
     """启动 MCP Server。"""

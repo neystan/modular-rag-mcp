@@ -95,7 +95,7 @@ def test_server_returns_method_not_found_for_unknown_request() -> None:
             {
                 "jsonrpc": "2.0",
                 "id": 99,
-                "method": "tools/list",
+                "method": "missing/method",
             },
         )
 
