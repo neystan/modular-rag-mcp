@@ -8,6 +8,7 @@ from typing import Any, BinaryIO
 
 from core.settings import SettingsError, load_settings
 from mcp_server.protocol_handler import ProtocolHandler
+from mcp_server.tools.list_collections import build_list_collections_tool
 from mcp_server.tools.query_knowledge_hub import build_query_knowledge_hub_tool
 from observability.logger import get_logger
 
@@ -26,7 +27,12 @@ class McpServer:
         self.stdout = stdout or sys.stdout.buffer
         self.stderr = stderr or sys.stderr.buffer
         self.logger = get_logger(__name__)
-        self.protocol_handler = protocol_handler or ProtocolHandler(tools=[build_query_knowledge_hub_tool()])
+        self.protocol_handler = protocol_handler or ProtocolHandler(
+            tools=[
+                build_query_knowledge_hub_tool(),
+                build_list_collections_tool(),
+            ]
+        )
 
     def serve_forever(self) -> int:
         """循环读取并处理 MCP 消息，直到 EOF。"""
