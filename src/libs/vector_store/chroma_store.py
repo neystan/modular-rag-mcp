@@ -75,3 +75,24 @@ class ChromaStore(BaseVectorStore):
                 )
             )
         return results
+
+    def get_by_ids(self, ids: list[str], trace: Any | None = None) -> list[dict[str, Any]]:
+        normalized_ids = [str(item).strip() for item in ids if str(item).strip()]
+        if not normalized_ids:
+            return []
+
+        response = self._collection.get(
+            ids=normalized_ids,
+            include=["documents", "metadatas"],
+        )
+        response_ids = response.get("ids", [])
+        documents = response.get("documents", [])
+        metadatas = response.get("metadatas", [])
+        by_id: dict[str, dict[str, Any]] = {}
+        for item_id, text, metadata in zip(response_ids, documents, metadatas, strict=False):
+            by_id[str(item_id)] = {
+                "id": str(item_id),
+                "text": str(text or ""),
+                "metadata": dict(metadata or {}),
+            }
+        return [by_id[item_id] for item_id in normalized_ids if item_id in by_id]

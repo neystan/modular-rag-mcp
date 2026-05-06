@@ -96,6 +96,32 @@ def test_chroma_persists_records_across_instances(tmp_path: Path) -> None:
     assert results[0].text == "持久化文档"
 
 
+def test_chroma_get_by_ids_returns_text_and_metadata(tmp_path: Path) -> None:
+    store = ChromaStore({"collection": "lookup", "persist_path": str(tmp_path / "db")})
+    store.upsert(
+        [
+            VectorRecord(
+                id="doc-a",
+                vector=[0.1, 0.2],
+                text="第一段",
+                metadata={"source_path": "docs/a.pdf", "collection": "alpha"},
+            ),
+            VectorRecord(
+                id="doc-b",
+                vector=[0.3, 0.4],
+                text="第二段",
+                metadata={"source_path": "docs/b.pdf", "collection": "beta"},
+            ),
+        ]
+    )
+
+    items = store.get_by_ids(["doc-b", "doc-a", "missing"])
+
+    assert [item["id"] for item in items] == ["doc-b", "doc-a"]
+    assert items[0]["text"] == "第二段"
+    assert items[0]["metadata"]["collection"] == "beta"
+
+
 def test_vector_upserter_sanitizes_complex_metadata_for_chroma(tmp_path: Path) -> None:
     store = ChromaStore({"collection": "complex-meta", "persist_path": str(tmp_path / "db")})
     upserter = VectorUpserter(make_settings(tmp_path / "db"), vector_store=store)

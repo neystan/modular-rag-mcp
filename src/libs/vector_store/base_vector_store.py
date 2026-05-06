@@ -46,3 +46,8 @@ class BaseVectorStore(ABC):
         trace: Any | None = None,
     ) -> list[VectorQueryResult]:
         """按向量查询 Top-K 结果。"""
+
+    def get_by_ids(self, ids: list[str], trace: Any | None = None) -> list[dict[str, Any]]:
+        """按 ID 批量读取记录，默认由具体实现覆盖。"""
+
+        raise NotImplementedError("vector store get_by_ids is not implemented")
