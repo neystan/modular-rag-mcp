@@ -39,7 +39,14 @@ class Reranker:
         trace_context = trace if isinstance(trace, TraceContext) else None
 
         if not normalized_candidates or limit == 0:
-            self._record_trace(trace_context, len(normalized_candidates), 0, False, None)
+            self._record_trace(
+                trace_context,
+                len(normalized_candidates),
+                0,
+                False,
+                None,
+                self.reranker_backend.__class__.__name__,
+            )
             return []
 
         rerank_candidates = [
@@ -69,6 +76,7 @@ class Reranker:
             len(results),
             fallback_reason is not None,
             fallback_reason,
+            self.reranker_backend.__class__.__name__,
         )
         return results
 
@@ -142,10 +150,24 @@ class Reranker:
         result_count: int,
         fallback: bool,
         fallback_reason: str | None,
+        provider: str,
     ) -> None:
         if trace is None:
             return
 
+        trace.record_stage(
+            "rerank",
+            {
+                "method": "candidate_reranking",
+                "provider": provider,
+                "details": {
+                    "input_count": input_count,
+                    "result_count": result_count,
+                    "fallback": fallback,
+                    "fallback_reason": fallback_reason,
+                },
+            },
+        )
         trace.record_stage(
             "query_reranker.rerank",
             {
@@ -153,5 +175,7 @@ class Reranker:
                 "result_count": result_count,
                 "fallback": fallback,
                 "fallback_reason": fallback_reason,
+                "method": "candidate_reranking",
+                "provider": provider,
             },
         )

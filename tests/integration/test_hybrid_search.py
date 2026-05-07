@@ -8,9 +8,11 @@ import pytest
 
 from core.query_engine.hybrid_search import HybridSearch, HybridSearchError
 from core.query_engine.query_processor import ProcessedQuery
+from core.query_engine.reranker import Reranker
 from core.settings import Settings
 from core.trace import TraceContext
 from core.types import RetrievalResult
+from libs.reranker.base_reranker import BaseReranker, RerankCandidate
 
 
 class FakeQueryProcessor:
@@ -76,6 +78,21 @@ class FakeFusion:
             }
         )
         return list(self.fused)
+
+
+class FakeRerankerBackend(BaseReranker):
+    def rerank(
+        self,
+        query: str,
+        candidates: list[RerankCandidate],
+        trace: Any | None = None,
+    ) -> list[RerankCandidate]:
+        assert query == "query"
+        reordered = list(reversed(candidates))
+        return [
+            RerankCandidate(id=item.id, text=item.text, score=1.0 - index * 0.1, metadata=dict(item.metadata))
+            for index, item in enumerate(reordered)
+        ]
 
 
 def make_settings() -> Settings:
@@ -179,6 +196,40 @@ def test_hybrid_search_falls_back_to_sparse_when_dense_fails() -> None:
 
     assert [item.chunk_id for item in results] == ["chunk-s"]
     assert any(stage["stage"] == "hybrid_search.search" for stage in trace.stages)
+
+
+def test_query_trace_contains_query_dense_sparse_fusion_and_rerank_stages() -> None:
+    search = HybridSearch(
+        make_settings(),
+        query_processor=FakeQueryProcessor(
+            ProcessedQuery(original_query="query", normalized_query="query", keywords=["query"], filters={})
+        ),
+        dense_retriever=FakeDenseRetriever([make_result("chunk-a"), make_result("chunk-b")]),
+        sparse_retriever=FakeSparseRetriever([make_result("chunk-b"), make_result("chunk-c")]),
+        fusion=FakeFusion([make_result("chunk-b"), make_result("chunk-a"), make_result("chunk-c")]),
+    )
+    reranker = Reranker(make_settings(), reranker_backend=FakeRerankerBackend({}))
+    trace = TraceContext(trace_type="query")
+
+    search_results = search.search("query", top_k=3, trace=trace)
+    reranked = reranker.rerank("query", search_results, top_k=2, trace=trace)
+    payload = trace.to_dict()
+
+    assert payload["trace_type"] == "query"
+    assert [item.chunk_id for item in reranked] == ["chunk-c", "chunk-a"]
+
+    expected_stages = {"query_processing", "dense_retrieval", "sparse_retrieval", "fusion", "rerank"}
+    stage_map = {stage["stage"]: stage for stage in payload["stages"]}
+    assert expected_stages.issubset(stage_map)
+    for stage_name in expected_stages:
+        stage = stage_map[stage_name]
+        assert stage["elapsed_ms"] >= 0
+        assert stage["payload"]["method"]
+
+    assert stage_map["dense_retrieval"]["payload"]["provider"] == "FakeDenseRetriever"
+    assert stage_map["sparse_retrieval"]["payload"]["provider"] == "FakeSparseRetriever"
+    assert stage_map["fusion"]["payload"]["method"] == "rrf"
+    assert stage_map["rerank"]["payload"]["provider"] == "FakeRerankerBackend"
 
 
 def test_hybrid_search_raises_when_both_routes_fail() -> None:

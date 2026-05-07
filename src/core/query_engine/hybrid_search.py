@@ -48,6 +48,7 @@ class HybridSearch:
         trace_context = trace if isinstance(trace, TraceContext) else None
         processed = self.query_processor.process(query, trace=trace_context)
         merged_filters = self._merge_filters(processed.filters, filters)
+        self._record_query_stage(trace_context, processed, merged_filters)
 
         dense_results, sparse_results, dense_error, sparse_error = self._run_retrievers(
             processed.normalized_query,
@@ -55,6 +56,24 @@ class HybridSearch:
             top_k,
             merged_filters,
             trace_context,
+        )
+        self._record_retrieval_stage(
+            trace_context,
+            stage="dense_retrieval",
+            method="dense_vector_search",
+            provider=self.dense_retriever.__class__.__name__,
+            result_count=len(dense_results),
+            fallback=bool(dense_error),
+            error=dense_error,
+        )
+        self._record_retrieval_stage(
+            trace_context,
+            stage="sparse_retrieval",
+            method="keyword_bm25_search",
+            provider=self.sparse_retriever.__class__.__name__,
+            result_count=len(sparse_results),
+            fallback=bool(sparse_error),
+            error=sparse_error,
         )
 
         if dense_error and sparse_error:
@@ -65,8 +84,19 @@ class HybridSearch:
 
         if dense_results and sparse_results:
             fused = self.fusion.fuse(dense_results, sparse_results, top_k=top_k, trace=trace_context)
+            fusion_method = "rrf"
         else:
             fused = dense_results or sparse_results
+            fusion_method = "passthrough"
+
+        self._record_fusion_stage(
+            trace_context,
+            method=fusion_method,
+            provider=self.fusion.__class__.__name__,
+            dense_count=len(dense_results),
+            sparse_count=len(sparse_results),
+            result_count=len(fused),
+        )
 
         filtered = self._apply_metadata_filters(fused, merged_filters)[:top_k]
         if trace_context is not None:
@@ -81,6 +111,77 @@ class HybridSearch:
                 },
             )
         return filtered
+
+    @staticmethod
+    def _record_query_stage(
+        trace: TraceContext | None,
+        processed: Any,
+        merged_filters: dict[str, Any],
+    ) -> None:
+        if trace is None:
+            return
+        trace.record_stage(
+            "query_processing",
+            {
+                "method": "rule_based_keyword_extraction",
+                "provider": processed.__class__.__name__,
+                "details": {
+                    "keyword_count": len(processed.keywords),
+                    "filter_count": len(merged_filters),
+                },
+            },
+        )
+
+    @staticmethod
+    def _record_retrieval_stage(
+        trace: TraceContext | None,
+        *,
+        stage: str,
+        method: str,
+        provider: str,
+        result_count: int,
+        fallback: bool,
+        error: str | None,
+    ) -> None:
+        if trace is None:
+            return
+        trace.record_stage(
+            stage,
+            {
+                "method": method,
+                "provider": provider,
+                "details": {
+                    "result_count": result_count,
+                    "fallback": fallback,
+                    "error": error,
+                },
+            },
+        )
+
+    @staticmethod
+    def _record_fusion_stage(
+        trace: TraceContext | None,
+        *,
+        method: str,
+        provider: str,
+        dense_count: int,
+        sparse_count: int,
+        result_count: int,
+    ) -> None:
+        if trace is None:
+            return
+        trace.record_stage(
+            "fusion",
+            {
+                "method": method,
+                "provider": provider,
+                "details": {
+                    "dense_count": dense_count,
+                    "sparse_count": sparse_count,
+                    "result_count": result_count,
+                },
+            },
+        )
 
     def _run_retrievers(
         self,
