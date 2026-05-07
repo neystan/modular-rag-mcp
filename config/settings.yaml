@@ -4,9 +4,10 @@ app:
 
 llm:
   provider: qwen
-  model: qwen3.5-plus-2026-02-15
+  model: qwen3.5-flash
   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
   api_key: sk-5d87f40486954f53bed85f3383eb95d0
+  timeout: 90
 
 vision_llm:
   provider: qwen
