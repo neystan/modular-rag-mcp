@@ -132,6 +132,35 @@ class SQLiteIntegrityChecker(FileIntegrityChecker):
         record["metadata"] = json.loads(metadata_json) if metadata_json else {}
         return record
 
+    def remove_record(self, file_hash: str) -> bool:
+        normalized_hash = self._normalize_hash(file_hash)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM ingestion_history WHERE file_hash = ?",
+                (normalized_hash,),
+            )
+        return cursor.rowcount > 0
+
+    def list_processed(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT file_hash, file_path, status, error_msg, metadata_json, updated_at
+                FROM ingestion_history
+                WHERE status = ?
+                ORDER BY updated_at DESC, file_path ASC
+                """,
+                (SUCCESS_STATUS,),
+            ).fetchall()
+
+        records: list[dict[str, Any]] = []
+        for row in rows:
+            record = dict(row)
+            metadata_json = record.pop("metadata_json")
+            record["metadata"] = json.loads(metadata_json) if metadata_json else {}
+            records.append(record)
+        return records
+
     def _initialize_database(self) -> None:
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")

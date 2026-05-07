@@ -100,6 +100,34 @@ class ChromaStore(BaseVectorStore):
             }
         return [by_id[item_id] for item_id in normalized_ids if item_id in by_id]
 
+    def get_by_metadata(self, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        response = self._collection.get(
+            where=self._normalize_where(filters),
+            include=["documents", "metadatas"],
+        )
+        ids = response.get("ids", [])
+        documents = response.get("documents", [])
+        metadatas = response.get("metadatas", [])
+        return [
+            {
+                "id": str(item_id),
+                "text": str(text or ""),
+                "metadata": dict(metadata or {}),
+            }
+            for item_id, text, metadata in zip(ids, documents, metadatas, strict=False)
+        ]
+
+    def delete_by_metadata(self, filters: dict[str, Any]) -> int:
+        if not isinstance(filters, dict) or not filters:
+            raise ValueError("chroma delete error: filters are required")
+        normalized_where = self._normalize_where(filters)
+        matches = self._collection.get(where=normalized_where)
+        ids = matches.get("ids", [])
+        if not ids:
+            return 0
+        self._collection.delete(where=normalized_where)
+        return len(ids)
+
     def get_collection_stats(self) -> dict[str, Any]:
         response = self._collection.get(include=["metadatas"])
         metadatas = response.get("metadatas", [])
@@ -134,3 +162,11 @@ class ChromaStore(BaseVectorStore):
             if isinstance(decoded, list):
                 return len(decoded)
         return 0
+
+    @staticmethod
+    def _normalize_where(filters: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not filters:
+            return None
+        if len(filters) == 1:
+            return dict(filters)
+        return {"$and": [{key: value} for key, value in filters.items()]}

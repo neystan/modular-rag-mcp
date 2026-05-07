@@ -2036,7 +2036,7 @@ dashboard:
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | G1 | Dashboard 基础架构与系统总览页 | [x] | 2026-05-07 | Streamlit 多页面框架 + Overview 页面 + ConfigService + Chroma 统计 |
-| G2 | DocumentManager 实现 | [ ] | | |
+| G2 | DocumentManager 实现 | [x] | 2026-05-07 | 跨存储文档生命周期管理 + 单元测试 |
 | G3 | 数据浏览器页面 | [ ] | | |
 | G4 | Ingestion 管理页面 | [ ] | | |
 | G5 | Ingestion 追踪页面 | [ ] | | |
@@ -2074,10 +2074,10 @@ dashboard:
 | 阶段 D | 7 | 7 | 100% |
 | 阶段 E | 6 | 6 | 100% |
 | 阶段 F | 5 | 5 | 100% |
-| 阶段 G | 6 | 1 | 17% |
+| 阶段 G | 6 | 2 | 33% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **54** | **78%** |
+| **总计** | **69** | **55** | **80%** |
 
 ---
 
@@ -2976,7 +2976,7 @@ dashboard:
   - `app.py` 使用 `st.navigation()` 注册六个页面（未完成的页面显示占位提示）
   - Overview 页面：读取 `Settings` 展示组件卡片，调用 `ChromaStore.get_collection_stats()` 展示数据统计
   - `ConfigService`：封装 Settings 读取，格式化组件配置信息
-- **验收标准**：`streamlit run src/observability/dashboard/app.py` 可启动，总览页展示当前配置信息。
+- **验收标准**：`uv run streamlit run src/observability/dashboard/app.py` 可启动，总览页展示当前配置信息。
 - **测试方法**：手动运行 `python scripts/start_dashboard.py` 并验证页面渲染。
 
 ### G2：DocumentManager 实现
