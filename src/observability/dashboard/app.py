@@ -6,6 +6,7 @@ from typing import Callable
 
 import streamlit as st
 
+from observability.dashboard.pages.data_browser import render as render_data_browser
 from observability.dashboard.pages.overview import render as render_overview
 
 
@@ -21,12 +22,7 @@ def main() -> None:
         {
             "系统": [
                 st.Page(render_overview, title="系统总览", url_path="overview", icon=":material/dashboard:"),
-                st.Page(
-                    _placeholder_page("数据浏览器", "G3 将在下一阶段接入文档、Chunk 与图片浏览能力。"),
-                    title="数据浏览器",
-                    url_path="data-browser",
-                    icon=":material/folder_open:",
-                ),
+                st.Page(render_data_browser, title="数据浏览器", url_path="data-browser", icon=":material/folder_open:"),
             ],
             "操作": [
                 st.Page(
