@@ -2026,7 +2026,7 @@ dashboard:
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | F1 | TraceContext 增强（finish + 耗时统计 + trace_type） | [x] | 2026-05-07 | TraceContext finish/to_dict + TraceCollector + 单元测试 |
-| F2 | 结构化日志 logger（JSON Lines） | [ ] | | |
+| F2 | 结构化日志 logger（JSON Lines） | [x] | 2026-05-07 | JSONFormatter + get_trace_logger + write_trace + 单元测试 |
 | F3 | 在 Query 链路打点 | [ ] | | |
 | F4 | 在 Ingestion 链路打点 | [ ] | | |
 | F5 | Pipeline 进度回调 (on_progress) | [ ] | | |
@@ -2073,11 +2073,11 @@ dashboard:
 | 阶段 C | 15 | 15 | 100% |
 | 阶段 D | 7 | 7 | 100% |
 | 阶段 E | 6 | 6 | 100% |
-| 阶段 F | 5 | 1 | 20% |
+| 阶段 F | 5 | 2 | 40% |
 | 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **49** | **71%** |
+| **总计** | **69** | **50** | **72%** |
 
 ---
 
