@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from core.settings import Settings
 from core.trace import TraceContext
@@ -47,6 +47,8 @@ class IngestionPipelineResult:
 class IngestionPipeline:
     """串行执行 integrity -> load -> split -> transform -> encode -> store。"""
 
+    progress_stages = ("load", "split", "transform", "embed", "upsert")
+
     def __init__(
         self,
         settings: Settings | dict[str, Any],
@@ -85,9 +87,11 @@ class IngestionPipeline:
         collection: str = "default",
         force: bool = False,
         trace: Any | None = None,
+        on_progress: Callable[[str, int, int], None] | None = None,
     ) -> IngestionPipelineResult:
         file_path = Path(path)
         trace_context = trace if isinstance(trace, TraceContext) else TraceContext(trace_type="ingestion")
+        total_stages = len(self.progress_stages)
         file_hash = self._run_stage(
             "integrity.compute_hash",
             lambda: self.integrity_checker.compute_sha256(file_path),
@@ -122,6 +126,7 @@ class IngestionPipeline:
                     "image_count": len(document.metadata.get("images", [])),
                 },
             )
+            self._emit_progress(on_progress, "load", 1, total_stages)
             chunks = self._run_stage("chunker.split", lambda: self.chunker.split_document(document), trace_context)
             self._record_pipeline_stage(
                 trace_context,
@@ -133,6 +138,7 @@ class IngestionPipeline:
                     "document_id": document.id,
                 },
             )
+            self._emit_progress(on_progress, "split", 2, total_stages)
             chunks = self._run_stage("transform.apply", lambda: self._apply_transforms(chunks, trace_context), trace_context)
             self._record_pipeline_stage(
                 trace_context,
@@ -144,6 +150,7 @@ class IngestionPipeline:
                     "transform_count": len(self.transforms),
                 },
             )
+            self._emit_progress(on_progress, "transform", 3, total_stages)
             chunks, image_count = self._run_stage(
                 "image_storage.index",
                 lambda: self._persist_images(chunks, collection, document.id),
@@ -165,6 +172,7 @@ class IngestionPipeline:
                     "sparse_record_count": len(batch_result.sparse_records),
                 },
             )
+            self._emit_progress(on_progress, "embed", 4, total_stages)
             self._run_stage(
                 "bm25.build",
                 lambda: self.bm25_indexer.build(batch_result.sparse_records, rebuild=False),
@@ -186,6 +194,7 @@ class IngestionPipeline:
                     "collection": collection,
                 },
             )
+            self._emit_progress(on_progress, "upsert", 5, total_stages)
             self.integrity_checker.mark_success(
                 file_hash,
                 file_path,
@@ -332,6 +341,17 @@ class IngestionPipeline:
                 "details": details,
             },
         )
+
+    @staticmethod
+    def _emit_progress(
+        on_progress: Callable[[str, int, int], None] | None,
+        stage_name: str,
+        current: int,
+        total: int,
+    ) -> None:
+        if on_progress is None:
+            return
+        on_progress(stage_name, current, total)
 
     @staticmethod
     def _batch_size(settings: Settings | dict[str, Any]) -> int:
