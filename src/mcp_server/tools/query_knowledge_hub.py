@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from core.query_engine.hybrid_search import HybridSearch
+from core.response.multimodal_assembler import MultimodalAssembler
 from core.query_engine.reranker import Reranker
 from core.response.response_builder import ResponseBuilder
 from core.settings import Settings, load_settings
@@ -19,6 +20,7 @@ ToolExecutor = Callable[[str, int, str | None], list[RetrievalResult]]
 def build_query_knowledge_hub_tool(
     executor: ToolExecutor | None = None,
     response_builder: ResponseBuilder | None = None,
+    multimodal_assembler: MultimodalAssembler | None = None,
     settings_path: str | Path = "config/settings.yaml",
 ) -> ToolDefinition:
     """构建 query_knowledge_hub 的工具定义。"""
@@ -30,6 +32,7 @@ def build_query_knowledge_hub_tool(
             collection=arguments.get("collection"),
             executor=executor,
             response_builder=response_builder,
+            multimodal_assembler=multimodal_assembler,
             settings_path=settings_path,
         )
 
@@ -56,6 +59,7 @@ def query_knowledge_hub(
     collection: Any = None,
     executor: ToolExecutor | None = None,
     response_builder: ResponseBuilder | None = None,
+    multimodal_assembler: MultimodalAssembler | None = None,
     settings_path: str | Path = "config/settings.yaml",
 ) -> dict[str, object]:
     """执行知识库查询并返回 MCP Tool 结果。"""
@@ -64,10 +68,15 @@ def query_knowledge_hub(
     normalized_top_k = _normalize_top_k(top_k)
     normalized_collection = _normalize_collection(collection)
     active_builder = response_builder or ResponseBuilder()
+    active_assembler = multimodal_assembler or MultimodalAssembler()
     active_executor = executor or _build_default_executor(settings_path)
 
     retrieval_results = active_executor(normalized_query, normalized_top_k, normalized_collection)
-    return active_builder.build(retrieval_results, normalized_query)
+    payload = active_builder.build(retrieval_results, normalized_query)
+    image_contents = active_assembler.assemble(retrieval_results)
+    if image_contents:
+        payload["content"].extend(image_contents)
+    return payload
 
 
 def _build_default_executor(settings_path: str | Path) -> ToolExecutor:

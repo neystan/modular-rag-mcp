@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import base64
 from pathlib import Path
 
 from core.types import RetrievalResult
@@ -175,3 +176,52 @@ def test_query_knowledge_hub_tool_returns_friendly_empty_state() -> None:
     result = response["result"]
     assert "未找到与“unknown topic”相关的文档" in result["content"][0]["text"]
     assert result["structuredContent"]["citations"] == []
+
+
+def test_query_knowledge_hub_tool_returns_image_content(tmp_path: Path) -> None:
+    image_path = tmp_path / "diagram.png"
+    image_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN6kAAAAASUVORK5CYII="
+    )
+    image_path.write_bytes(image_bytes)
+
+    def fake_executor(query: str, top_k: int, collection: str | None) -> list[RetrievalResult]:
+        return [
+            RetrievalResult(
+                chunk_id="chunk-image",
+                score=0.77,
+                text="This chunk references an architecture image.",
+                metadata={
+                    "source_path": "docs/arch.pdf",
+                    "images": [
+                        {
+                            "id": "img-1",
+                            "path": str(image_path),
+                            "text_offset": 0,
+                            "text_length": 10,
+                            "page": 1,
+                        }
+                    ],
+                },
+            )
+        ]
+
+    handler = ProtocolHandler(tools=[build_query_knowledge_hub_tool(executor=fake_executor)])
+    response = handler.handle_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "query_knowledge_hub",
+                "arguments": {
+                    "query": "architecture image",
+                },
+            },
+        }
+    )
+
+    content = response["result"]["content"]
+    image_item = next(item for item in content if item["type"] == "image")
+    assert image_item["mimeType"] == "image/png"
+    assert image_item["data"] == base64.b64encode(image_bytes).decode("ascii")
