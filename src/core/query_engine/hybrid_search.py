@@ -63,6 +63,7 @@ class HybridSearch:
             method="dense_vector_search",
             provider=self.dense_retriever.__class__.__name__,
             result_count=len(dense_results),
+            chunk_ids=[item.chunk_id for item in dense_results],
             fallback=bool(dense_error),
             error=dense_error,
         )
@@ -72,6 +73,7 @@ class HybridSearch:
             method="keyword_bm25_search",
             provider=self.sparse_retriever.__class__.__name__,
             result_count=len(sparse_results),
+            chunk_ids=[item.chunk_id for item in sparse_results],
             fallback=bool(sparse_error),
             error=sparse_error,
         )
@@ -96,6 +98,7 @@ class HybridSearch:
             dense_count=len(dense_results),
             sparse_count=len(sparse_results),
             result_count=len(fused),
+            chunk_ids=[item.chunk_id for item in fused],
         )
 
         filtered = self._apply_metadata_filters(fused, merged_filters)[:top_k]
@@ -106,6 +109,7 @@ class HybridSearch:
                     "dense_count": len(dense_results),
                     "sparse_count": len(sparse_results),
                     "result_count": len(filtered),
+                    "chunk_ids": [item.chunk_id for item in filtered],
                     "dense_fallback": bool(dense_error),
                     "sparse_fallback": bool(sparse_error),
                 },
@@ -126,7 +130,10 @@ class HybridSearch:
                 "method": "rule_based_keyword_extraction",
                 "provider": processed.__class__.__name__,
                 "details": {
+                    "query_text": processed.normalized_query,
+                    "keywords": list(processed.keywords),
                     "keyword_count": len(processed.keywords),
+                    "filters": dict(merged_filters),
                     "filter_count": len(merged_filters),
                 },
             },
@@ -140,6 +147,7 @@ class HybridSearch:
         method: str,
         provider: str,
         result_count: int,
+        chunk_ids: list[str],
         fallback: bool,
         error: str | None,
     ) -> None:
@@ -152,6 +160,7 @@ class HybridSearch:
                 "provider": provider,
                 "details": {
                     "result_count": result_count,
+                    "chunk_ids": list(chunk_ids),
                     "fallback": fallback,
                     "error": error,
                 },
@@ -167,6 +176,7 @@ class HybridSearch:
         dense_count: int,
         sparse_count: int,
         result_count: int,
+        chunk_ids: list[str],
     ) -> None:
         if trace is None:
             return
@@ -179,6 +189,7 @@ class HybridSearch:
                     "dense_count": dense_count,
                     "sparse_count": sparse_count,
                     "result_count": result_count,
+                    "chunk_ids": list(chunk_ids),
                 },
             },
         )

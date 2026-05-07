@@ -41,7 +41,9 @@ class Reranker:
         if not normalized_candidates or limit == 0:
             self._record_trace(
                 trace_context,
+                [],
                 len(normalized_candidates),
+                [],
                 0,
                 False,
                 None,
@@ -72,7 +74,9 @@ class Reranker:
 
         self._record_trace(
             trace_context,
+            [item.chunk_id for item in normalized_candidates],
             len(normalized_candidates),
+            [item.chunk_id for item in results],
             len(results),
             fallback_reason is not None,
             fallback_reason,
@@ -146,7 +150,9 @@ class Reranker:
     @staticmethod
     def _record_trace(
         trace: TraceContext | None,
+        input_ids: list[str],
         input_count: int,
+        result_ids: list[str],
         result_count: int,
         fallback: bool,
         fallback_reason: str | None,
@@ -161,7 +167,9 @@ class Reranker:
                 "method": "candidate_reranking",
                 "provider": provider,
                 "details": {
+                    "input_ids": list(input_ids),
                     "input_count": input_count,
+                    "result_ids": list(result_ids),
                     "result_count": result_count,
                     "fallback": fallback,
                     "fallback_reason": fallback_reason,
@@ -171,7 +179,9 @@ class Reranker:
         trace.record_stage(
             "query_reranker.rerank",
             {
+                "input_ids": list(input_ids),
                 "input_count": input_count,
+                "result_ids": list(result_ids),
                 "result_count": result_count,
                 "fallback": fallback,
                 "fallback_reason": fallback_reason,

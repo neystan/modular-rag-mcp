@@ -11,6 +11,7 @@ import pytest
 
 from core.query_engine.query_processor import ProcessedQuery
 from core.types import RetrievalResult
+from core.trace import TraceContext
 
 
 def _load_query_script_module() -> Any:
@@ -102,6 +103,33 @@ class FakeHybridSearch:
         filters: dict[str, Any] | None = None,
         trace: Any | None = None,
     ) -> list[RetrievalResult]:
+        if isinstance(trace, TraceContext):
+            trace.record_stage(
+                "query_processing",
+                {
+                    "details": {
+                        "query_text": query,
+                        "keywords": ["configure", "azure"],
+                        "filters": dict(filters or {}),
+                    }
+                },
+            )
+            trace.record_stage(
+                "dense_retrieval",
+                {"details": {"chunk_ids": [item.chunk_id for item in self.results], "result_count": len(self.results)}},
+            )
+            trace.record_stage(
+                "sparse_retrieval",
+                {"details": {"chunk_ids": [item.chunk_id for item in self.results], "result_count": len(self.results)}},
+            )
+            trace.record_stage(
+                "fusion",
+                {"details": {"chunk_ids": [item.chunk_id for item in self.results], "result_count": len(self.results)}},
+            )
+            trace.record_stage(
+                "hybrid_search.search",
+                {"chunk_ids": [item.chunk_id for item in self.results], "result_count": len(self.results)},
+            )
         self.calls.append({"query": query, "top_k": top_k, "filters": filters})
         return list(self.results)
 
@@ -129,6 +157,16 @@ class FakeReranker:
         top_k: int | None = None,
         trace: Any | None = None,
     ) -> list[RetrievalResult]:
+        if isinstance(trace, TraceContext):
+            trace.record_stage(
+                "rerank",
+                {
+                    "details": {
+                        "input_ids": [item.chunk_id for item in candidates],
+                        "result_ids": [item.chunk_id for item in self.results],
+                    }
+                },
+            )
         self.calls.append({"query": query, "candidate_ids": [item.chunk_id for item in candidates], "top_k": top_k})
         return list(self.results)
 
@@ -176,7 +214,7 @@ def test_run_query_uses_hybrid_search_and_reranker_in_default_mode() -> None:
         components=components,
     )
 
-    assert components.query_processor.calls == ["How to configure Azure?"]
+    assert execution.processed_query.normalized_query == "How to configure Azure?"
     assert components.hybrid_search.calls == [
         {"query": "How to configure Azure?", "top_k": 3, "filters": {"collection": "manuals"}}
     ]
@@ -248,3 +286,18 @@ def test_main_returns_error_for_invalid_top_k(capsys: pytest.CaptureFixture[str]
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "top_k must be positive int" in captured.err
+
+
+def test_run_query_persists_query_trace(monkeypatch: pytest.MonkeyPatch) -> None:
+    persisted: list[dict[str, Any]] = []
+    fusion_results = [make_result("chunk-a")]
+    components = make_components(fusion_results=fusion_results, final_results=fusion_results)
+    monkeypatch.setattr(query_script, "_persist_query_trace", persisted.append)
+
+    execution = run_query("How to configure Azure?", top_k=3, components=components)
+
+    assert [item.chunk_id for item in execution.final_results] == ["chunk-a"]
+    assert len(persisted) == 1
+    assert persisted[0]["trace_type"] == "query"
+    stage_names = [stage["stage"] for stage in persisted[0]["stages"]]
+    assert "query.execution" in stage_names

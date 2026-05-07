@@ -11,6 +11,7 @@ from observability.logger import DEFAULT_TRACE_LOG_PATH
 
 
 TRACKED_INGESTION_STAGES = ("load", "split", "transform", "embed", "upsert")
+TRACKED_QUERY_STAGES = ("query_processing", "dense_retrieval", "sparse_retrieval", "fusion", "rerank")
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +42,39 @@ class TraceDetail:
     finished_at: str
     total_elapsed_ms: float
     source_name: str = ""
+    stages: list[StageTiming] = field(default_factory=list)
+    raw_stages: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class QueryTraceSummary:
+    trace_id: str
+    trace_type: str
+    started_at: str
+    finished_at: str
+    total_elapsed_ms: float
+    query_text: str
+    result_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class QueryTraceDetail:
+    trace_id: str
+    trace_type: str
+    started_at: str
+    finished_at: str
+    total_elapsed_ms: float
+    query_text: str
+    keywords: list[str] = field(default_factory=list)
+    collection: str = ""
+    rerank_enabled: bool = True
+    rerank_applied: bool = False
+    final_ids: list[str] = field(default_factory=list)
+    dense_ids: list[str] = field(default_factory=list)
+    sparse_ids: list[str] = field(default_factory=list)
+    fusion_ids: list[str] = field(default_factory=list)
+    rerank_input_ids: list[str] = field(default_factory=list)
+    rerank_result_ids: list[str] = field(default_factory=list)
     stages: list[StageTiming] = field(default_factory=list)
     raw_stages: list[dict[str, Any]] = field(default_factory=list)
 
@@ -83,6 +117,59 @@ class TraceService:
                 total_elapsed_ms=_safe_float(trace.get("total_elapsed_ms")),
                 source_name=_extract_source_name(raw_stages),
                 stages=_extract_ingestion_stages(raw_stages),
+                raw_stages=raw_stages,
+            )
+        raise ValueError(f"trace not found: {normalized_trace_id}")
+
+    def list_query_traces(self, query_keyword: str | None = None) -> list[QueryTraceSummary]:
+        normalized_keyword = str(query_keyword or "").strip().lower()
+        traces = [trace for trace in self._load_traces() if str(trace.get("trace_type", "")) == "query"]
+        summaries: list[QueryTraceSummary] = []
+        for trace in traces:
+            raw_stages = _as_stage_list(trace.get("stages"))
+            query_text = _extract_query_text(raw_stages)
+            if normalized_keyword and normalized_keyword not in query_text.lower():
+                continue
+            summaries.append(
+                QueryTraceSummary(
+                    trace_id=str(trace.get("trace_id", "")),
+                    trace_type="query",
+                    started_at=str(trace.get("started_at", "")),
+                    finished_at=str(trace.get("finished_at", "")),
+                    total_elapsed_ms=_safe_float(trace.get("total_elapsed_ms")),
+                    query_text=query_text,
+                    result_count=len(_extract_final_ids(raw_stages)),
+                )
+            )
+        return [item for item in summaries if item.trace_id.strip()]
+
+    def get_query_trace(self, trace_id: str) -> QueryTraceDetail:
+        normalized_trace_id = _require_non_empty_str(trace_id, "trace_id")
+        for trace in self._load_traces():
+            if str(trace.get("trace_type", "")) != "query":
+                continue
+            if str(trace.get("trace_id", "")).strip() != normalized_trace_id:
+                continue
+            raw_stages = _as_stage_list(trace.get("stages"))
+            execution = _extract_query_execution(raw_stages)
+            return QueryTraceDetail(
+                trace_id=normalized_trace_id,
+                trace_type="query",
+                started_at=str(trace.get("started_at", "")),
+                finished_at=str(trace.get("finished_at", "")),
+                total_elapsed_ms=_safe_float(trace.get("total_elapsed_ms")),
+                query_text=_extract_query_text(raw_stages),
+                keywords=_extract_query_keywords(raw_stages),
+                collection=str(execution.get("collection", "") or ""),
+                rerank_enabled=bool(execution.get("rerank_enabled", True)),
+                rerank_applied=bool(execution.get("rerank_applied", False)),
+                final_ids=_extract_final_ids(raw_stages),
+                dense_ids=_extract_stage_chunk_ids(raw_stages, "dense_retrieval"),
+                sparse_ids=_extract_stage_chunk_ids(raw_stages, "sparse_retrieval"),
+                fusion_ids=_extract_stage_chunk_ids(raw_stages, "fusion"),
+                rerank_input_ids=_extract_stage_detail_list(raw_stages, "rerank", "input_ids"),
+                rerank_result_ids=_extract_stage_detail_list(raw_stages, "rerank", "result_ids"),
+                stages=_extract_query_stages(raw_stages),
                 raw_stages=raw_stages,
             )
         raise ValueError(f"trace not found: {normalized_trace_id}")
@@ -147,6 +234,23 @@ def _extract_ingestion_stages(raw_stages: list[dict[str, Any]]) -> list[StageTim
     return stage_timings
 
 
+def _extract_query_stages(raw_stages: list[dict[str, Any]]) -> list[StageTiming]:
+    stage_points: list[tuple[str, float, dict[str, Any], str]] = []
+    for stage_name in TRACKED_QUERY_STAGES:
+        matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == stage_name), None)
+        if matched is None:
+            continue
+        stage_points.append(
+            (
+                stage_name,
+                _safe_float(matched.get("elapsed_ms")),
+                dict(matched.get("payload", {})) if isinstance(matched.get("payload"), dict) else {},
+                str(matched.get("recorded_at", "")),
+            )
+        )
+    return [StageTiming(stage=name, elapsed_ms=elapsed, duration_ms=0.0, payload=payload, recorded_at=recorded_at) for name, elapsed, payload, recorded_at in stage_points]
+
+
 def _as_stage_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -180,6 +284,75 @@ def _extract_source_name(raw_stages: list[dict[str, Any]]) -> str:
             if document_id:
                 return document_id
     return ""
+
+
+def _extract_query_text(raw_stages: list[dict[str, Any]]) -> str:
+    matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == "query_processing"), None)
+    if matched is None:
+        matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == "query.execution"), None)
+    if matched is None:
+        return ""
+    payload = matched.get("payload")
+    if not isinstance(payload, dict):
+        return ""
+    details = payload.get("details")
+    if isinstance(details, dict):
+        query_text = str(details.get("query_text", "")).strip()
+        if query_text:
+            return query_text
+    return str(payload.get("query_text", "")).strip()
+
+
+def _extract_query_keywords(raw_stages: list[dict[str, Any]]) -> list[str]:
+    matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == "query_processing"), None)
+    if matched is None:
+        return []
+    payload = matched.get("payload")
+    if not isinstance(payload, dict):
+        return []
+    details = payload.get("details")
+    keywords = details.get("keywords", []) if isinstance(details, dict) else []
+    if not isinstance(keywords, list):
+        return []
+    return [str(keyword) for keyword in keywords if str(keyword).strip()]
+
+
+def _extract_query_execution(raw_stages: list[dict[str, Any]]) -> dict[str, Any]:
+    matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == "query.execution"), None)
+    if matched is None:
+        return {}
+    payload = matched.get("payload")
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
+def _extract_final_ids(raw_stages: list[dict[str, Any]]) -> list[str]:
+    execution = _extract_query_execution(raw_stages)
+    final_ids = execution.get("final_ids", [])
+    if isinstance(final_ids, list):
+        return [str(item) for item in final_ids if str(item).strip()]
+    rerank_ids = _extract_stage_detail_list(raw_stages, "rerank", "result_ids")
+    if rerank_ids:
+        return rerank_ids
+    return _extract_stage_chunk_ids(raw_stages, "fusion")
+
+
+def _extract_stage_chunk_ids(raw_stages: list[dict[str, Any]], stage_name: str) -> list[str]:
+    return _extract_stage_detail_list(raw_stages, stage_name, "chunk_ids")
+
+
+def _extract_stage_detail_list(raw_stages: list[dict[str, Any]], stage_name: str, key: str) -> list[str]:
+    matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == stage_name), None)
+    if matched is None:
+        return []
+    payload = matched.get("payload")
+    if not isinstance(payload, dict):
+        return []
+    details = payload.get("details")
+    source = details if isinstance(details, dict) else payload
+    values = source.get(key, []) if isinstance(source, dict) else []
+    if not isinstance(values, list):
+        return []
+    return [str(item) for item in values if str(item).strip()]
 
 
 def _require_non_empty_str(value: str, field_name: str) -> str:

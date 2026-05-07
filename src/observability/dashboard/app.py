@@ -10,6 +10,7 @@ from observability.dashboard.pages.data_browser import render as render_data_bro
 from observability.dashboard.pages.ingestion_manager import render as render_ingestion_manager
 from observability.dashboard.pages.ingestion_traces import render as render_ingestion_traces
 from observability.dashboard.pages.overview import render as render_overview
+from observability.dashboard.pages.query_traces import render as render_query_traces
 
 
 def main() -> None:
@@ -42,7 +43,7 @@ def main() -> None:
                     icon=":material/timeline:",
                 ),
                 st.Page(
-                    _placeholder_page("Query 追踪", "G6 将在这里展示查询 Trace 历史与召回细节。"),
+                    render_query_traces,
                     title="Query 追踪",
                     url_path="query-traces",
                     icon=":material/search:",
