@@ -8,6 +8,7 @@ from typing import Any, BinaryIO
 
 from core.settings import SettingsError, load_settings
 from mcp_server.protocol_handler import ProtocolHandler
+from mcp_server.tools.get_document_summary import build_get_document_summary_tool
 from mcp_server.tools.list_collections import build_list_collections_tool
 from mcp_server.tools.query_knowledge_hub import build_query_knowledge_hub_tool
 from observability.logger import get_logger
@@ -31,6 +32,7 @@ class McpServer:
             tools=[
                 build_query_knowledge_hub_tool(),
                 build_list_collections_tool(),
+                build_get_document_summary_tool(),
             ]
         )
 
