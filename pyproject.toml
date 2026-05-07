@@ -9,6 +9,7 @@ dependencies = [
     "pillow>=11.2.1",
     "pypdf>=6.5.0",
     "pyyaml>=6.0.3",
+    "streamlit>=1.45.1",
 ]
 
 [build-system]

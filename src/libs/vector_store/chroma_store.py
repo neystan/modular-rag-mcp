@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,8 @@ class ChromaStore(BaseVectorStore):
 
         persist_path = Path(str(self.config.get("persist_path", self.default_persist_path))).expanduser()
         persist_path.mkdir(parents=True, exist_ok=True)
+        self._persist_path = persist_path
+        self._collection_name = collection_name
 
         self._client = chromadb.PersistentClient(path=str(persist_path))
         self._collection = self._client.get_or_create_collection(name=collection_name)
@@ -96,3 +99,38 @@ class ChromaStore(BaseVectorStore):
                 "metadata": dict(metadata or {}),
             }
         return [by_id[item_id] for item_id in normalized_ids if item_id in by_id]
+
+    def get_collection_stats(self) -> dict[str, Any]:
+        response = self._collection.get(include=["metadatas"])
+        metadatas = response.get("metadatas", [])
+        chunk_count = int(self._collection.count())
+        source_paths: set[str] = set()
+        image_count = 0
+
+        for metadata in metadatas:
+            normalized = dict(metadata or {})
+            source_path = str(normalized.get("source_path", "")).strip()
+            if source_path:
+                source_paths.add(source_path)
+            image_count += self._count_images(normalized.get("images"))
+
+        return {
+            "collection": self._collection_name,
+            "chunk_count": chunk_count,
+            "document_count": len(source_paths),
+            "image_count": image_count,
+            "persist_path": str(self._persist_path),
+        }
+
+    @staticmethod
+    def _count_images(raw_images: Any) -> int:
+        if isinstance(raw_images, list):
+            return len(raw_images)
+        if isinstance(raw_images, str) and raw_images.strip():
+            try:
+                decoded = json.loads(raw_images)
+            except json.JSONDecodeError:
+                return 0
+            if isinstance(decoded, list):
+                return len(decoded)
+        return 0
