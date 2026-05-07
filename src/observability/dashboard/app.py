@@ -8,6 +8,7 @@ import streamlit as st
 
 from observability.dashboard.pages.data_browser import render as render_data_browser
 from observability.dashboard.pages.ingestion_manager import render as render_ingestion_manager
+from observability.dashboard.pages.ingestion_traces import render as render_ingestion_traces
 from observability.dashboard.pages.overview import render as render_overview
 
 
@@ -35,7 +36,7 @@ def main() -> None:
             ],
             "追踪": [
                 st.Page(
-                    _placeholder_page("Ingestion 追踪", "G5 将在这里展示摄取 Trace 历史与阶段耗时。"),
+                    render_ingestion_traces,
                     title="Ingestion 追踪",
                     url_path="ingestion-traces",
                     icon=":material/timeline:",
