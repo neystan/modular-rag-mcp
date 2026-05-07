@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any, Mapping
 
 
@@ -25,9 +26,24 @@ def _normalize_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
         images = normalized["images"]
         if images is None:
             normalized["images"] = []
+        elif isinstance(images, str):
+            normalized["images"] = _normalize_serialized_images(images)
         else:
             normalized["images"] = [_normalize_image_metadata(image) for image in images]
     return normalized
+
+
+def _normalize_serialized_images(raw_images: str) -> list[dict[str, Any]]:
+    content = raw_images.strip()
+    if not content:
+        return []
+    try:
+        decoded = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise TypeError("metadata.images must be list or valid JSON list") from exc
+    if not isinstance(decoded, list):
+        raise TypeError("metadata.images JSON value must be list")
+    return [_normalize_image_metadata(image) for image in decoded]
 
 
 def _normalize_image_metadata(image: Any) -> dict[str, Any]:

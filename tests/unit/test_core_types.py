@@ -77,6 +77,20 @@ def test_chunk_record_roundtrip_preserves_dense_and_sparse_vectors() -> None:
     assert payload["sparse_vector"] == {"token:a": 0.8, "token:b": 2.0}
 
 
+def test_chunk_record_accepts_serialized_images_metadata() -> None:
+    metadata = make_metadata()
+    metadata["images"] = json.dumps(metadata["images"], ensure_ascii=False)
+
+    record = ChunkRecord(
+        id="chunk-record-serialized",
+        text="embedded chunk",
+        metadata=metadata,
+    )
+
+    assert isinstance(record.metadata["images"], list)
+    assert record.metadata["images"][0]["id"] == "abc123_1_0"
+
+
 def test_metadata_requires_source_path() -> None:
     with pytest.raises(ValueError, match="metadata.source_path is required"):
         Document(id="doc-1", text="body", metadata={"collection": "demo"})
