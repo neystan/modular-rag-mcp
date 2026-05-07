@@ -87,7 +87,7 @@ class IngestionPipeline:
         trace: Any | None = None,
     ) -> IngestionPipelineResult:
         file_path = Path(path)
-        trace_context = trace if isinstance(trace, TraceContext) else TraceContext()
+        trace_context = trace if isinstance(trace, TraceContext) else TraceContext(trace_type="ingestion")
         file_hash = self._run_stage(
             "integrity.compute_hash",
             lambda: self.integrity_checker.compute_sha256(file_path),
@@ -111,8 +111,39 @@ class IngestionPipeline:
         try:
             document = self._run_stage("loader.load", lambda: self.loader.load(file_path), trace_context)
             document = self._attach_collection(document, collection)
+            self._record_pipeline_stage(
+                trace_context,
+                stage="load",
+                method=self.loader.__class__.__name__.removesuffix("Loader").lower() or self.loader.__class__.__name__,
+                provider=self.loader.__class__.__name__,
+                details={
+                    "document_id": document.id,
+                    "text_length": len(document.text),
+                    "image_count": len(document.metadata.get("images", [])),
+                },
+            )
             chunks = self._run_stage("chunker.split", lambda: self.chunker.split_document(document), trace_context)
+            self._record_pipeline_stage(
+                trace_context,
+                stage="split",
+                method=self._resolve_split_method(),
+                provider=self.chunker.__class__.__name__,
+                details={
+                    "chunk_count": len(chunks),
+                    "document_id": document.id,
+                },
+            )
             chunks = self._run_stage("transform.apply", lambda: self._apply_transforms(chunks, trace_context), trace_context)
+            self._record_pipeline_stage(
+                trace_context,
+                stage="transform",
+                method=self._resolve_transform_method(),
+                provider=self._resolve_transform_provider(),
+                details={
+                    "chunk_count": len(chunks),
+                    "transform_count": len(self.transforms),
+                },
+            )
             chunks, image_count = self._run_stage(
                 "image_storage.index",
                 lambda: self._persist_images(chunks, collection, document.id),
@@ -123,6 +154,17 @@ class IngestionPipeline:
                 lambda: self.batch_processor.process(chunks, trace=trace_context),
                 trace_context,
             )
+            self._record_pipeline_stage(
+                trace_context,
+                stage="embed",
+                method="batch_encode",
+                provider=self.batch_processor.__class__.__name__,
+                details={
+                    "chunk_count": len(chunks),
+                    "dense_record_count": len(batch_result.dense_records),
+                    "sparse_record_count": len(batch_result.sparse_records),
+                },
+            )
             self._run_stage(
                 "bm25.build",
                 lambda: self.bm25_indexer.build(batch_result.sparse_records, rebuild=False),
@@ -132,6 +174,17 @@ class IngestionPipeline:
                 "vector.upsert",
                 lambda: self.vector_upserter.upsert(batch_result.dense_records, trace=trace_context),
                 trace_context,
+            )
+            self._record_pipeline_stage(
+                trace_context,
+                stage="upsert",
+                method=self._resolve_upsert_method(),
+                provider=self.vector_upserter.__class__.__name__,
+                details={
+                    "vector_record_count": len(vector_records),
+                    "image_count": image_count,
+                    "collection": collection,
+                },
             )
             self.integrity_checker.mark_success(
                 file_hash,
@@ -229,6 +282,56 @@ class IngestionPipeline:
             raise IngestionPipelineError(f"{stage} failed: {exc}") from exc
         trace.record_stage(stage, {"status": "ok"})
         return result
+
+    def _resolve_split_method(self) -> str:
+        if isinstance(self.settings, Settings):
+            splitter = self.settings.splitter
+        else:
+            splitter = self.settings.get("splitter", {})
+        if isinstance(splitter, dict):
+            provider = splitter.get("provider")
+            if isinstance(provider, str) and provider.strip():
+                return provider.strip()
+        return self.chunker.__class__.__name__.lower()
+
+    def _resolve_transform_method(self) -> str:
+        if not self.transforms:
+            return "none"
+        return "+".join(transform.__class__.__name__.lower() for transform in self.transforms)
+
+    def _resolve_transform_provider(self) -> str:
+        if not self.transforms:
+            return "none"
+        return ",".join(transform.__class__.__name__ for transform in self.transforms)
+
+    def _resolve_upsert_method(self) -> str:
+        if isinstance(self.settings, Settings):
+            vector_store = self.settings.vector_store
+        else:
+            vector_store = self.settings.get("vector_store", {})
+        if isinstance(vector_store, dict):
+            provider = vector_store.get("provider")
+            if isinstance(provider, str) and provider.strip():
+                return provider.strip()
+        return self.vector_upserter.__class__.__name__.lower()
+
+    @staticmethod
+    def _record_pipeline_stage(
+        trace: TraceContext,
+        *,
+        stage: str,
+        method: str,
+        provider: str,
+        details: dict[str, Any],
+    ) -> None:
+        trace.record_stage(
+            stage,
+            {
+                "method": method,
+                "provider": provider,
+                "details": details,
+            },
+        )
 
     @staticmethod
     def _batch_size(settings: Settings | dict[str, Any]) -> int:

@@ -198,7 +198,7 @@ def test_pipeline_runs_end_to_end_with_injected_dependencies(tmp_path: Path) -> 
         vector_upserter=VectorUpserter(make_settings(), vector_store=vector_store),
         image_storage=image_storage,
     )
-    trace = TraceContext()
+    trace = TraceContext(trace_type="ingestion")
 
     result = pipeline.run(source_pdf, collection="manuals", trace=trace)
 
@@ -212,6 +212,16 @@ def test_pipeline_runs_end_to_end_with_injected_dependencies(tmp_path: Path) -> 
     assert vector_store.records[0].metadata["collection"] == "manuals"
     assert integrity.success_calls[0]["metadata"]["chunk_count"] == 2
     assert any(stage["stage"] == "pipeline.success" for stage in trace.stages)
+    payload = trace.to_dict()
+    assert payload["trace_type"] == "ingestion"
+    stage_map = {stage["stage"]: stage for stage in payload["stages"]}
+    for stage_name in ("load", "split", "transform", "embed", "upsert"):
+        assert stage_name in stage_map
+        assert stage_map[stage_name]["elapsed_ms"] >= 0
+        assert stage_map[stage_name]["payload"]["method"]
+    assert stage_map["load"]["payload"]["provider"] == "FakeLoader"
+    assert stage_map["split"]["payload"]["method"] == "placeholder"
+    assert stage_map["upsert"]["payload"]["method"] == "placeholder"
 
 
 def test_pipeline_wraps_stage_failures_and_marks_failed(tmp_path: Path) -> None:
