@@ -48,6 +48,7 @@ def test_trace_service_lists_ingestion_traces_sorted_desc(tmp_path: Path) -> Non
     assert [item.trace_id for item in traces] == ["ing-2", "ing-1"]
     assert traces[0].stage_count == 2
     assert traces[1].total_elapsed_ms == 1000.0
+    assert traces[0].source_name == ""
 
 
 def test_trace_service_get_ingestion_trace_extracts_stage_durations(tmp_path: Path) -> None:
@@ -63,6 +64,7 @@ def test_trace_service_get_ingestion_trace_extracts_stage_durations(tmp_path: Pa
                 "total_elapsed_ms": 2000.0,
                 "stages": [
                     {"stage": "loader.load", "elapsed_ms": 80.0, "payload": {"status": "ok"}},
+                    {"stage": "dashboard.upload", "elapsed_ms": 90.0, "payload": {"original_filename": "sample.pdf"}},
                     {"stage": "load", "elapsed_ms": 100.0, "payload": {"details": {"text_length": 10}}},
                     {"stage": "chunker.split", "elapsed_ms": 260.0, "payload": {"status": "ok"}},
                     {"stage": "split", "elapsed_ms": 300.0, "payload": {"details": {"chunk_count": 2}}},
@@ -77,10 +79,11 @@ def test_trace_service_get_ingestion_trace_extracts_stage_durations(tmp_path: Pa
     detail = TraceService(log_path).get_ingestion_trace("ing-1")
 
     assert detail.trace_id == "ing-1"
+    assert detail.source_name == "sample.pdf"
     assert [item.stage for item in detail.stages] == ["load", "split", "transform", "embed", "upsert"]
     assert [item.duration_ms for item in detail.stages] == [100.0, 200.0, 600.0, 500.0, 400.0]
     assert detail.stages[0].payload["details"]["text_length"] == 10
-    assert len(detail.raw_stages) == 7
+    assert len(detail.raw_stages) == 8
 
 
 def test_collect_ingestion_trace_data_selects_latest_trace(tmp_path: Path) -> None:
@@ -102,7 +105,7 @@ def test_collect_ingestion_trace_data_selects_latest_trace(tmp_path: Path) -> No
                 "started_at": "2026-05-07T10:02:00+00:00",
                 "finished_at": "2026-05-07T10:02:02+00:00",
                 "total_elapsed_ms": 2000.0,
-                "stages": [{"stage": "load", "elapsed_ms": 200.0}],
+                "stages": [{"stage": "dashboard.upload", "elapsed_ms": 50.0, "payload": {"original_filename": "new.pdf"}}, {"stage": "load", "elapsed_ms": 200.0}],
             },
         ],
     )
@@ -112,6 +115,7 @@ def test_collect_ingestion_trace_data_selects_latest_trace(tmp_path: Path) -> No
     assert payload["selected_trace_id"] == "ing-new"
     assert payload["detail"] is not None
     assert payload["detail"].trace_id == "ing-new"
+    assert payload["detail"].source_name == "new.pdf"
 
 
 def test_trace_service_rejects_invalid_jsonl(tmp_path: Path) -> None:

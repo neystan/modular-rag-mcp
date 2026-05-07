@@ -123,6 +123,7 @@ class FakePipeline:
                 "collection": collection,
                 "force": force,
                 "exists_during_run": temp_path.exists(),
+                "trace": trace,
             }
         )
         if callable(on_progress):
@@ -159,6 +160,7 @@ def test_collect_ingestion_data_includes_stats(tmp_path: Path) -> None:
 def test_ingest_uploaded_file_passes_progress_and_cleans_temp_file() -> None:
     pipeline = FakePipeline()
     progress_calls: list[tuple[str, int, int]] = []
+    persisted_traces: list[dict[str, object]] = []
 
     result = ingest_uploaded_file(
         "sample.pdf",
@@ -167,6 +169,7 @@ def test_ingest_uploaded_file_passes_progress_and_cleans_temp_file() -> None:
         pipeline=pipeline,
         force=True,
         progress_callback=lambda stage, current, total: progress_calls.append((stage, current, total)),
+        trace_persister=persisted_traces.append,
     )
 
     assert result.collection == "manuals"
@@ -175,7 +178,46 @@ def test_ingest_uploaded_file_passes_progress_and_cleans_temp_file() -> None:
     assert pipeline.calls[0]["collection"] == "manuals"
     assert pipeline.calls[0]["force"] is True
     assert pipeline.calls[0]["exists_during_run"] is True
+    assert pipeline.calls[0]["trace"] is not None
     assert not Path(pipeline.calls[0]["path"]).exists()
+    assert len(persisted_traces) == 1
+    assert persisted_traces[0]["trace_type"] == "ingestion"
+    assert any(
+        stage["stage"] == "dashboard.upload" and stage["payload"]["original_filename"] == "sample.pdf"
+        for stage in persisted_traces[0]["stages"]
+    )
+
+
+def test_ingest_uploaded_file_persists_error_trace(tmp_path: Path) -> None:
+    class FailingPipeline(FakePipeline):
+        def run(
+            self,
+            path: str | Path,
+            *,
+            collection: str = "default",
+            force: bool = False,
+            trace: object | None = None,
+            on_progress: object | None = None,
+        ) -> IngestionPipelineResult:
+            raise RuntimeError("boom")
+
+    persisted_traces: list[dict[str, object]] = []
+
+    try:
+        ingest_uploaded_file(
+            "broken.pdf",
+            b"%PDF-1.4 broken",
+            "manuals",
+            pipeline=FailingPipeline(),
+            trace_persister=persisted_traces.append,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+    else:
+        raise AssertionError("expected RuntimeError")
+
+    assert len(persisted_traces) == 1
+    assert any(stage["stage"] == "dashboard.error" for stage in persisted_traces[0]["stages"])
 
 
 def test_data_service_delete_document_updates_listing(tmp_path: Path) -> None:

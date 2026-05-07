@@ -58,6 +58,7 @@ def render(trace_service: TraceService | None = None) -> None:
         [
             {
                 "trace_id": item.trace_id,
+                "source_name": item.source_name,
                 "started_at": item.started_at,
                 "finished_at": item.finished_at,
                 "total_elapsed_ms": item.total_elapsed_ms,
@@ -73,8 +74,9 @@ def render(trace_service: TraceService | None = None) -> None:
     top_cols = st.columns(4)
     top_cols[0].metric("Trace ID", detail.trace_id[:12])
     top_cols[1].metric("总耗时", f"{detail.total_elapsed_ms:.1f} ms")
-    top_cols[2].metric("开始时间", detail.started_at)
+    top_cols[2].metric("文件", detail.source_name or "unknown")
     top_cols[3].metric("结束时间", detail.finished_at)
+    st.caption(f"开始时间: {detail.started_at}")
 
     st.subheader("阶段耗时")
     _render_stage_waterfall(detail)
@@ -104,5 +106,6 @@ def _render_stage_waterfall(detail: TraceDetail) -> None:
 def _format_trace_option(trace_id: str, traces: list[Any]) -> str:
     for item in traces:
         if item.trace_id == trace_id:
-            return f"{item.started_at} · {item.total_elapsed_ms:.1f} ms · {trace_id[:12]}"
+            source_label = item.source_name or "unknown"
+            return f"{item.started_at} · {source_label} · {item.total_elapsed_ms:.1f} ms"
     return trace_id

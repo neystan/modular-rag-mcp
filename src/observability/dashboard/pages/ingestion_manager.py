@@ -9,8 +9,10 @@ from typing import Any, Callable, Protocol
 import streamlit as st
 
 from core.settings import Settings, load_settings
+from core.trace import TraceCollector, TraceContext
 from ingestion.pipeline import IngestionPipeline, IngestionPipelineResult
 from observability.dashboard.services.data_service import DataService
+from observability.logger import DEFAULT_TRACE_LOG_PATH, write_trace
 
 
 ProgressCallback = Callable[[str, int, int], None]
@@ -60,6 +62,7 @@ def ingest_uploaded_file(
     pipeline: PipelineRunner,
     force: bool = False,
     progress_callback: ProgressCallback | None = None,
+    trace_persister: Callable[[dict[str, Any]], None] | None = None,
 ) -> IngestionPipelineResult:
     normalized_collection = _require_non_empty_str(collection, "collection")
     if not isinstance(file_name, str) or not file_name.strip():
@@ -72,13 +75,50 @@ def ingest_uploaded_file(
         temp_file.write(bytes(file_bytes))
         temp_path = Path(temp_file.name)
 
+    trace_context = TraceContext(trace_type="ingestion")
+    trace_context.record_stage(
+        "dashboard.upload",
+        {
+            "original_filename": file_name.strip(),
+            "temp_path": str(temp_path),
+            "collection": normalized_collection,
+            "force": force,
+        },
+    )
+    collector = TraceCollector(persister=trace_persister or _persist_dashboard_trace)
+
     try:
-        return pipeline.run(
+        result = pipeline.run(
             temp_path,
             collection=normalized_collection,
             force=force,
+            trace=trace_context,
             on_progress=progress_callback,
         )
+        trace_context.record_stage(
+            "dashboard.result",
+            {
+                "original_filename": file_name.strip(),
+                "collection": normalized_collection,
+                "skipped": result.skipped,
+                "file_hash": result.file_hash,
+                "chunk_count": len(result.chunks),
+                "image_count": result.image_count,
+            },
+        )
+        collector.collect(trace_context)
+        return result
+    except Exception as exc:  # noqa: BLE001
+        trace_context.record_stage(
+            "dashboard.error",
+            {
+                "original_filename": file_name.strip(),
+                "collection": normalized_collection,
+                "error": str(exc),
+            },
+        )
+        collector.collect(trace_context)
+        raise
     finally:
         temp_path.unlink(missing_ok=True)
 
@@ -235,6 +275,10 @@ def _set_feedback(level: str, message: str) -> None:
         "level": level,
         "message": message,
     }
+
+
+def _persist_dashboard_trace(trace_dict: dict[str, Any]) -> None:
+    write_trace(trace_dict, log_path=DEFAULT_TRACE_LOG_PATH)
 
 
 def _require_non_empty_str(value: str, field_name: str) -> str:

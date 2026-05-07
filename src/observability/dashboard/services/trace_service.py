@@ -30,6 +30,7 @@ class TraceSummary:
     finished_at: str
     total_elapsed_ms: float
     stage_count: int
+    source_name: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,7 @@ class TraceDetail:
     started_at: str
     finished_at: str
     total_elapsed_ms: float
+    source_name: str = ""
     stages: list[StageTiming] = field(default_factory=list)
     raw_stages: list[dict[str, Any]] = field(default_factory=list)
 
@@ -59,6 +61,7 @@ class TraceService:
                 finished_at=str(trace.get("finished_at", "")),
                 total_elapsed_ms=_safe_float(trace.get("total_elapsed_ms")),
                 stage_count=len(_as_stage_list(trace.get("stages"))),
+                source_name=_extract_source_name(_as_stage_list(trace.get("stages"))),
             )
             for trace in traces
             if str(trace.get("trace_id", "")).strip()
@@ -78,6 +81,7 @@ class TraceService:
                 started_at=str(trace.get("started_at", "")),
                 finished_at=str(trace.get("finished_at", "")),
                 total_elapsed_ms=_safe_float(trace.get("total_elapsed_ms")),
+                source_name=_extract_source_name(raw_stages),
                 stages=_extract_ingestion_stages(raw_stages),
                 raw_stages=raw_stages,
             )
@@ -154,6 +158,28 @@ def _safe_float(value: Any) -> float:
         return round(float(value), 3)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _extract_source_name(raw_stages: list[dict[str, Any]]) -> str:
+    for stage_name in ("dashboard.upload", "dashboard.result", "pipeline.skip", "load"):
+        matched = next((item for item in raw_stages if str(item.get("stage", "")).strip() == stage_name), None)
+        if matched is None:
+            continue
+        payload = matched.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        original_filename = str(payload.get("original_filename", "")).strip()
+        if original_filename:
+            return original_filename
+        path_value = str(payload.get("path", "")).strip()
+        if path_value:
+            return Path(path_value).name
+        details = payload.get("details")
+        if isinstance(details, dict):
+            document_id = str(details.get("document_id", "")).strip()
+            if document_id:
+                return document_id
+    return ""
 
 
 def _require_non_empty_str(value: str, field_name: str) -> str:
