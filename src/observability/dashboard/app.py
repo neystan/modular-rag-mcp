@@ -7,6 +7,7 @@ from typing import Callable
 import streamlit as st
 
 from observability.dashboard.pages.data_browser import render as render_data_browser
+from observability.dashboard.pages.ingestion_manager import render as render_ingestion_manager
 from observability.dashboard.pages.overview import render as render_overview
 
 
@@ -26,7 +27,7 @@ def main() -> None:
             ],
             "操作": [
                 st.Page(
-                    _placeholder_page("Ingestion 管理", "G4 将在这里接入文件上传、摄取和删除操作。"),
+                    render_ingestion_manager,
                     title="Ingestion 管理",
                     url_path="ingestion-manager",
                     icon=":material/upload_file:",

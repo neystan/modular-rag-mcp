@@ -1,4 +1,4 @@
-"""数据浏览服务。"""
+"""Dashboard 数据服务。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from core.settings import Settings, load_settings
-from ingestion.document_manager import DocumentDetail, DocumentInfo, DocumentManager
+from ingestion.document_manager import CollectionStats, DeleteResult, DocumentDetail, DocumentInfo, DocumentManager
 from ingestion.storage.bm25_indexer import BM25Indexer
 from ingestion.storage.image_storage import ImageStorage
 from libs.loader.file_integrity import SQLiteIntegrityChecker
@@ -14,7 +14,7 @@ from libs.vector_store.chroma_store import ChromaStore
 
 
 class DataService:
-    """封装 Dashboard 数据浏览所需的文档与详情读取。"""
+    """封装 Dashboard 数据浏览与管理所需的文档操作。"""
 
     def __init__(
         self,
@@ -36,6 +36,12 @@ class DataService:
     def list_collections(self) -> list[str]:
         collections = {item.collection for item in self._manager().list_documents()}
         return sorted(collections)
+
+    def delete_document(self, source_path: str, collection: str) -> DeleteResult:
+        return self._manager().delete_document(source_path, collection)
+
+    def get_collection_stats(self, collection: str | None = None) -> CollectionStats:
+        return self._manager().get_collection_stats(collection)
 
     def _manager(self) -> DocumentManager:
         if self._document_manager is not None:

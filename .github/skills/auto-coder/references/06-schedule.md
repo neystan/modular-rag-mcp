@@ -127,7 +127,7 @@
 | G1 | Dashboard 基础架构与系统总览页 | [x] | 2026-05-07 | Streamlit 多页面框架 + Overview 页面 + ConfigService + Chroma 统计 |
 | G2 | DocumentManager 实现 | [x] | 2026-05-07 | 跨存储文档生命周期管理 + 单元测试 |
 | G3 | 数据浏览器页面 | [x] | 2026-05-07 | DataService + 数据浏览页 + 单元测试 |
-| G4 | Ingestion 管理页面 | [ ] | | |
+| G4 | Ingestion 管理页面 | [x] | 2026-05-07 | 文件上传摄取 + on_progress 进度条 + 文档删除 |
 | G5 | Ingestion 追踪页面 | [ ] | | |
 | G6 | Query 追踪页面 | [ ] | | |
 
@@ -163,10 +163,10 @@
 | 阶段 D | 7 | 7 | 100% |
 | 阶段 E | 6 | 6 | 100% |
 | 阶段 F | 5 | 5 | 100% |
-| 阶段 G | 6 | 3 | 50% |
+| 阶段 G | 6 | 4 | 67% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **56** | **81%** |
+| **总计** | **69** | **57** | **83%** |
 
 ---
 
@@ -1065,7 +1065,7 @@
   - `app.py` 使用 `st.navigation()` 注册六个页面（未完成的页面显示占位提示）
   - Overview 页面：读取 `Settings` 展示组件卡片，调用 `ChromaStore.get_collection_stats()` 展示数据统计
   - `ConfigService`：封装 Settings 读取，格式化组件配置信息
-- **验收标准**：`streamlit run src/observability/dashboard/app.py` 可启动，总览页展示当前配置信息。
+- **验收标准**：`uv run streamlit run src/observability/dashboard/app.py` 可启动，总览页展示当前配置信息。
 - **测试方法**：手动运行 `python scripts/start_dashboard.py` 并验证页面渲染。
 
 ### G2：DocumentManager 实现
@@ -1277,3 +1277,5 @@
 - **M4（完成阶段 F）**：Ingestion + Query 双链路可追踪，JSON Lines 持久化。
 - **M5（完成阶段 G）**：六页面可视化管理平台就绪（评估面板为占位），数据可浏览、可管理、链路可追踪。
 - **M6（完成阶段 H+I）**：评估体系完整 + E2E 验收通过 + 文档完善，形成"面试/教学/演示"可复现项目。
+
+
