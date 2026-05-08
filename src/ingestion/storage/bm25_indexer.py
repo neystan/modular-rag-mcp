@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import math
 import pickle
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core.tokenization import tokenize_mixed_text
 from core.types import ChunkRecord
 
 
@@ -26,8 +26,6 @@ class BM25QueryResult:
 
 class BM25Indexer:
     """维护可落盘的 BM25 倒排索引。"""
-
-    token_pattern = re.compile(r"[\u4e00-\u9fff]{1,}|[A-Za-z0-9][A-Za-z0-9_-]*")
     default_index_file = "bm25_index.pkl"
 
     def __init__(self, index_dir: str | Path = "data/db/bm25") -> None:
@@ -150,10 +148,16 @@ class BM25Indexer:
     @classmethod
     def _tokenize(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, list):
-            return [str(token).lower() for token in value if str(token)]
+            tokens: list[str] = []
+            for item in value:
+                text = str(item).strip()
+                if not text:
+                    continue
+                tokens.extend(tokenize_mixed_text(text))
+            return tokens
         if not isinstance(value, str):
             raise BM25IndexerError("bm25 tokenize error: query must be string or list[str]")
-        return [token.lower() for token in cls.token_pattern.findall(value)]
+        return tokenize_mixed_text(value)
 
     @staticmethod
     def _document_payload(record: ChunkRecord) -> dict[str, Any]:

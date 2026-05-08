@@ -119,3 +119,24 @@ def test_query_supports_metadata_filters(tmp_path: Path) -> None:
 
     assert [result.chunk_id for result in alpha_results] == ["chunk-a"]
     assert [result.chunk_id for result in beta_results] == ["chunk-b"]
+
+
+def test_query_matches_chinese_question_tokens_after_reingest(tmp_path: Path) -> None:
+    indexer = BM25Indexer(tmp_path)
+    indexer.build(
+        [
+            make_record(
+                "chunk-a",
+                "docs/a.pdf",
+                {"作者叫什么名字": 0.2, "作者": 0.5, "名字": 0.4},
+                3,
+            )
+        ],
+        rebuild=True,
+    )
+
+    loaded = BM25Indexer(tmp_path)
+    loaded.load()
+    results = loaded.query("作者叫什么名字", top_k=5)
+
+    assert [result.chunk_id for result in results] == ["chunk-a"]

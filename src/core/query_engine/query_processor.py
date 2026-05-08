@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.settings import Settings
+from core.tokenization import expand_cjk_query_token
 from core.trace import TraceContext
 
 
@@ -57,8 +58,6 @@ class QueryProcessorError(ValueError):
 class QueryProcessor:
     """负责提取关键词并解析基础 filters。"""
 
-    token_pattern = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]*")
-
     def __init__(self, settings: Settings | dict[str, Any] | None = None) -> None:
         self.settings = settings
         self.stopwords = self._resolve_stopwords(settings)
@@ -87,12 +86,15 @@ class QueryProcessor:
     def _extract_keywords(self, query: str) -> list[str]:
         seen: set[str] = set()
         keywords: list[str] = []
-        for token in self.token_pattern.findall(query):
+        for token in re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]*", query):
             normalized = self._normalize_token(token)
-            if not normalized or normalized in self.stopwords or normalized in seen:
+            if not normalized:
                 continue
-            keywords.append(normalized)
-            seen.add(normalized)
+            for expanded in self._expand_keyword(normalized):
+                if not expanded or expanded in self.stopwords or expanded in seen:
+                    continue
+                keywords.append(expanded)
+                seen.add(expanded)
 
         if keywords:
             return keywords
@@ -108,6 +110,10 @@ class QueryProcessor:
                 normalized = normalized[len(prefix) :].strip()
                 break
         return normalized
+
+    @staticmethod
+    def _expand_keyword(token: str) -> list[str]:
+        return expand_cjk_query_token(token)
 
     @staticmethod
     def _normalize_query(query: str) -> str:

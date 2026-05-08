@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import copy
 import math
-import re
 from collections import Counter
 from typing import Any
 
+from core.tokenization import tokenize_mixed_text
 from core.trace import TraceContext
 from core.types import Chunk, ChunkRecord
 
 
 class SparseEncoder:
     """将 chunk 文本转换为 BM25 可消费的 term weight 结构。"""
-
-    token_pattern = re.compile(r"[\u4e00-\u9fff]{1,}|[A-Za-z0-9][A-Za-z0-9_-]*")
 
     def encode(self, chunks: list[Chunk], trace: Any | None = None) -> list[ChunkRecord]:
         records: list[ChunkRecord] = []
@@ -49,7 +47,7 @@ class SparseEncoder:
     def _tokenize(cls, text: str) -> list[str]:
         if not isinstance(text, str):
             raise TypeError("sparse encoder input error: text must be string")
-        return [token.lower() for token in cls.token_pattern.findall(text)]
+        return tokenize_mixed_text(text)
 
     @staticmethod
     def _build_sparse_vector(term_counts: Counter[str]) -> dict[str, float]:
