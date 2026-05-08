@@ -14,11 +14,12 @@ def make_record(
     source_path: str,
     sparse_vector: dict[str, float],
     doc_length: int,
+    collection: str = "",
 ) -> ChunkRecord:
     return ChunkRecord(
         id=chunk_id,
         text="placeholder text",
-        metadata={"source_path": source_path, "sparse_doc_length": doc_length},
+        metadata={"source_path": source_path, "sparse_doc_length": doc_length, "collection": collection},
         sparse_vector=sparse_vector,
     )
 
@@ -98,3 +99,23 @@ def test_remove_document_rebuilds_index(tmp_path: Path) -> None:
 
     assert reloaded.query("alpha", top_k=5) == []
     assert [result.chunk_id for result in reloaded.query("beta", top_k=5)] == ["chunk-b"]
+
+
+def test_query_supports_metadata_filters(tmp_path: Path) -> None:
+    indexer = BM25Indexer(tmp_path)
+    indexer.build(
+        [
+            make_record("chunk-a", "docs/a.pdf", {"pdf": 0.6, "fixture": 0.2}, 3, collection="alpha"),
+            make_record("chunk-b", "docs/b.pdf", {"pdf": 0.8, "fixture": 0.4}, 4, collection="beta"),
+        ],
+        rebuild=True,
+    )
+
+    loaded = BM25Indexer(tmp_path)
+    loaded.load()
+
+    alpha_results = loaded.query("pdf fixture", top_k=5, filters={"collection": "alpha"})
+    beta_results = loaded.query("pdf fixture", top_k=5, filters={"collection": "beta"})
+
+    assert [result.chunk_id for result in alpha_results] == ["chunk-a"]
+    assert [result.chunk_id for result in beta_results] == ["chunk-b"]

@@ -66,6 +66,7 @@ def test_chroma_roundtrip_supports_top_k_and_filters(tmp_path: Path) -> None:
     assert len(top_one) == 1
     assert top_one[0].id == "doc-1"
     assert top_one[0].text == "第一条文档"
+    assert 0.0 < top_one[0].score <= 1.0
 
     alpha_only = store.query([1.0, 0.0], top_k=3, filters={"collection": "alpha"})
     assert [item.id for item in alpha_only] == ["doc-1", "doc-2"]
@@ -73,6 +74,7 @@ def test_chroma_roundtrip_supports_top_k_and_filters(tmp_path: Path) -> None:
     faq_only = store.query([1.0, 0.0], top_k=3, filters={"doc_type": "faq"})
     assert [item.id for item in faq_only] == ["doc-2"]
     assert faq_only[0].metadata["doc_type"] == "faq"
+    assert all(0.0 < item.score <= 1.0 for item in faq_only)
 
 
 def test_chroma_persists_records_across_instances(tmp_path: Path) -> None:

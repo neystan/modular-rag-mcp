@@ -19,8 +19,13 @@ class FakeBM25Indexer:
         self.results = results
         self.calls: list[dict[str, Any]] = []
 
-    def query(self, query: str | list[str], top_k: int = 5) -> list[BM25QueryResult]:
-        self.calls.append({"query": query, "top_k": top_k})
+    def query(
+        self,
+        query: str | list[str],
+        top_k: int = 5,
+        filters: dict[str, Any] | None = None,
+    ) -> list[BM25QueryResult]:
+        self.calls.append({"query": query, "top_k": top_k, "filters": filters})
         return list(self.results)
 
 
@@ -79,7 +84,7 @@ def test_retrieve_merges_bm25_scores_with_vector_payloads() -> None:
 
     results = retriever.retrieve(["alpha", "beta"], top_k=2)
 
-    assert bm25.calls == [{"query": ["alpha", "beta"], "top_k": 2}]
+    assert bm25.calls == [{"query": ["alpha", "beta"], "top_k": 2, "filters": None}]
     assert vector_store.calls == [["chunk-b", "chunk-a"]]
     assert [item.chunk_id for item in results] == ["chunk-b", "chunk-a"]
     assert isinstance(results[0], RetrievalResult)
@@ -102,6 +107,19 @@ def test_retrieve_skips_missing_payloads() -> None:
     results = retriever.retrieve(["alpha"], top_k=5)
 
     assert [item.chunk_id for item in results] == ["chunk-a"]
+
+
+def test_retrieve_passes_filters_to_bm25_indexer() -> None:
+    bm25 = FakeBM25Indexer([BM25QueryResult(chunk_id="chunk-a", score=1.0)])
+    vector_store = FakeVectorStore(
+        [{"id": "chunk-a", "text": "A text", "metadata": {"source_path": "docs/a.pdf", "collection": "manuals"}}]
+    )
+    retriever = SparseRetriever(make_settings(), bm25_indexer=bm25, vector_store=vector_store)
+
+    results = retriever.retrieve(["alpha"], top_k=1, filters={"collection": "manuals"})
+
+    assert [item.chunk_id for item in results] == ["chunk-a"]
+    assert bm25.calls == [{"query": ["alpha"], "top_k": 1, "filters": {"collection": "manuals"}}]
 
 
 def test_retrieve_records_trace_stage() -> None:

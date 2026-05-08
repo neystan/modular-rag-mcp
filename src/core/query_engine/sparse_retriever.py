@@ -33,6 +33,7 @@ class SparseRetriever:
         self,
         keywords: list[str],
         top_k: int,
+        filters: dict[str, Any] | None = None,
         trace: Any | None = None,
     ) -> list[RetrievalResult]:
         if not isinstance(keywords, list) or not [str(item).strip() for item in keywords if str(item).strip()]:
@@ -41,7 +42,7 @@ class SparseRetriever:
             raise SparseRetrieverError("sparse retriever input error: top_k must be positive int")
 
         trace_context = trace if isinstance(trace, TraceContext) else None
-        postings = self.bm25_indexer.query(keywords, top_k=top_k)
+        postings = self.bm25_indexer.query(keywords, top_k=top_k, filters=filters)
         if not postings:
             if trace_context is not None:
                 trace_context.record_stage("sparse_retriever.retrieve", {"top_k": top_k, "result_count": 0})

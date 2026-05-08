@@ -67,7 +67,12 @@ class BM25Indexer:
         self.index = index
         self.doc_count = doc_count
 
-    def query(self, query: str | list[str], top_k: int = 5) -> list[BM25QueryResult]:
+    def query(
+        self,
+        query: str | list[str],
+        top_k: int = 5,
+        filters: dict[str, Any] | None = None,
+    ) -> list[BM25QueryResult]:
         if not isinstance(top_k, int) or top_k <= 0:
             raise BM25IndexerError("bm25 query error: top_k must be positive int")
         if not self.index:
@@ -75,6 +80,7 @@ class BM25Indexer:
 
         tokens = self._tokenize(query) if isinstance(query, str) else [str(token).lower() for token in query if str(token)]
         scores: dict[str, float] = {}
+        normalized_filters = self._normalize_filters(filters)
 
         for token in tokens:
             entry = self.index.get(token)
@@ -85,6 +91,9 @@ class BM25Indexer:
             idf = self._query_idf(len(postings))
             for posting in postings:
                 chunk_id = str(posting["chunk_id"])
+                document = self.documents.get(chunk_id)
+                if normalized_filters and not self._matches_filters(document, normalized_filters):
+                    continue
                 tf = float(posting["tf"])
                 score = idf * tf
                 scores[chunk_id] = scores.get(chunk_id, 0.0) + score
@@ -152,6 +161,7 @@ class BM25Indexer:
         return {
             "chunk_id": record.id,
             "source_path": str(record.metadata.get("source_path", "")),
+            "collection": str(record.metadata.get("collection", "")).strip(),
             "doc_length": int(record.metadata.get("sparse_doc_length", len(BM25Indexer._tokenize(record.text)))),
             "sparse_vector": {str(term): float(tf) for term, tf in sparse_vector.items()},
         }
@@ -160,3 +170,17 @@ class BM25Indexer:
         if df <= 0 or self.doc_count <= 0:
             return 0.0
         return math.log(1.0 + (self.doc_count - df + 0.5) / (df + 0.5))
+
+    @staticmethod
+    def _normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
+        if not isinstance(filters, dict):
+            return {}
+        return {str(key): value for key, value in filters.items() if str(key).strip() and value not in (None, "")}
+
+    @staticmethod
+    def _matches_filters(document: dict[str, Any] | None, filters: dict[str, Any]) -> bool:
+        if not filters:
+            return True
+        if not isinstance(document, dict):
+            return False
+        return all(document.get(key) == value for key, value in filters.items())

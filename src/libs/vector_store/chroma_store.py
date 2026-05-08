@@ -72,7 +72,7 @@ class ChromaStore(BaseVectorStore):
             results.append(
                 VectorQueryResult(
                     id=str(item_id),
-                    score=float(-distance),
+                    score=self._distance_to_score(distance),
                     text=str(text or ""),
                     metadata=dict(metadata or {}),
                 )
@@ -170,3 +170,13 @@ class ChromaStore(BaseVectorStore):
         if len(filters) == 1:
             return dict(filters)
         return {"$and": [{key: value} for key, value in filters.items()]}
+
+    @staticmethod
+    def _distance_to_score(distance: Any) -> float:
+        try:
+            normalized = float(distance)
+        except (TypeError, ValueError):
+            return 0.0
+        if normalized < 0:
+            normalized = 0.0
+        return round(1.0 / (1.0 + normalized), 10)

@@ -214,6 +214,7 @@ class HybridSearch:
                 self.sparse_retriever.retrieve,
                 keywords,
                 top_k,
+                filters,
                 trace,
             )
 

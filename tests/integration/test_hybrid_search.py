@@ -50,8 +50,14 @@ class FakeSparseRetriever:
         self.error = error
         self.calls: list[dict[str, Any]] = []
 
-    def retrieve(self, keywords: list[str], top_k: int, trace: Any | None = None) -> list[RetrievalResult]:
-        self.calls.append({"keywords": list(keywords), "top_k": top_k})
+    def retrieve(
+        self,
+        keywords: list[str],
+        top_k: int,
+        filters: dict[str, Any] | None = None,
+        trace: Any | None = None,
+    ) -> list[RetrievalResult]:
+        self.calls.append({"keywords": list(keywords), "top_k": top_k, "filters": filters})
         if self.error is not None:
             raise self.error
         return list(self.results)
@@ -146,7 +152,7 @@ def test_hybrid_search_orchestrates_query_dense_sparse_and_fusion() -> None:
 
     assert query_processor.calls == ["How to configure Azure?"]
     assert dense.calls == [{"query": "How to configure Azure?", "top_k": 2, "filters": {}}]
-    assert sparse.calls == [{"keywords": ["configure", "azure"], "top_k": 2}]
+    assert sparse.calls == [{"keywords": ["configure", "azure"], "top_k": 2, "filters": {}}]
     assert fusion.calls == [{"dense_ids": ["chunk-a", "chunk-b"], "sparse_ids": ["chunk-b", "chunk-c"], "top_k": 2}]
     assert [item.chunk_id for item in results] == ["chunk-b", "chunk-a"]
 
@@ -174,6 +180,7 @@ def test_hybrid_search_applies_metadata_filters_as_fallback() -> None:
     results = search.search("query", top_k=5, filters={"collection": "manuals"})
 
     assert [item.chunk_id for item in results] == ["chunk-a"]
+    assert sparse.calls == [{"keywords": ["query"], "top_k": 5, "filters": {"collection": "manuals"}}]
 
 
 def test_hybrid_search_falls_back_to_sparse_when_dense_fails() -> None:

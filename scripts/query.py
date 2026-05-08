@@ -108,24 +108,36 @@ def run_query(
 
     filters = {"collection": normalized_collection} if normalized_collection else None
     trace = TraceContext(trace_type="query")
+    merged_filters = filters or {}
 
     try:
         if verbose:
             processed = active_components.query_processor.process(normalized_query, trace=trace)
+            merged_filters = dict(processed.filters)
+            if filters:
+                merged_filters.update(filters)
             dense_results = active_components.dense_retriever.retrieve(
                 processed.normalized_query,
                 normalized_top_k,
-                filters=processed.filters,
+                filters=merged_filters,
                 trace=trace,
             )
-            sparse_results = active_components.sparse_retriever.retrieve(processed.keywords, normalized_top_k, trace=trace)
+            sparse_results = active_components.sparse_retriever.retrieve(
+                processed.keywords,
+                normalized_top_k,
+                filters=merged_filters,
+                trace=trace,
+            )
             fusion_results = active_components.fusion.fuse(
                 dense_results,
                 sparse_results,
                 top_k=normalized_top_k,
                 trace=trace,
             )
-            fusion_results = active_components.hybrid_search._apply_metadata_filters(fusion_results, filters)[:normalized_top_k]
+            fusion_results = active_components.hybrid_search._apply_metadata_filters(
+                fusion_results,
+                merged_filters,
+            )[:normalized_top_k]
             trace.record_stage(
                 "hybrid_search.search",
                 {
@@ -143,7 +155,7 @@ def run_query(
             fusion_results = active_components.hybrid_search.search(
                 normalized_query,
                 top_k=normalized_top_k,
-                filters=filters,
+                filters=merged_filters or None,
                 trace=trace,
             )
             processed = _processed_query_from_trace(trace, normalized_query)

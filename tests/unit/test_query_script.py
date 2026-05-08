@@ -64,8 +64,14 @@ class FakeSparseRetriever:
         self.results = results
         self.calls: list[dict[str, Any]] = []
 
-    def retrieve(self, keywords: list[str], top_k: int, trace: Any | None = None) -> list[RetrievalResult]:
-        self.calls.append({"keywords": list(keywords), "top_k": top_k})
+    def retrieve(
+        self,
+        keywords: list[str],
+        top_k: int,
+        filters: dict[str, Any] | None = None,
+        trace: Any | None = None,
+    ) -> list[RetrievalResult]:
+        self.calls.append({"keywords": list(keywords), "top_k": top_k, "filters": filters})
         return list(self.results)
 
 
@@ -260,9 +266,11 @@ def test_run_query_verbose_collects_dense_sparse_and_fusion_results() -> None:
     )
 
     assert components.dense_retriever.calls == [
-        {"query": "How to configure Azure?", "top_k": 2, "filters": {}}
+        {"query": "How to configure Azure?", "top_k": 2, "filters": {"collection": "manuals"}}
     ]
-    assert components.sparse_retriever.calls == [{"keywords": ["configure", "azure"], "top_k": 2}]
+    assert components.sparse_retriever.calls == [
+        {"keywords": ["configure", "azure"], "top_k": 2, "filters": {"collection": "manuals"}}
+    ]
     assert components.fusion.calls == [{"dense_ids": ["chunk-d"], "sparse_ids": ["chunk-s"], "top_k": 2}]
     assert components.reranker.calls == []
     assert [item.chunk_id for item in execution.final_results] == ["chunk-d"]
@@ -288,7 +296,7 @@ def test_run_query_uses_configured_top_k_when_argument_is_omitted() -> None:
     )
 
     assert components.dense_retriever.calls == [{"query": "How to configure Azure?", "top_k": 2, "filters": {}}]
-    assert components.sparse_retriever.calls == [{"keywords": ["configure", "azure"], "top_k": 2}]
+    assert components.sparse_retriever.calls == [{"keywords": ["configure", "azure"], "top_k": 2, "filters": {}}]
     assert components.fusion.calls == [{"dense_ids": ["chunk-d"], "sparse_ids": ["chunk-s"], "top_k": 2}]
     assert [item.chunk_id for item in execution.final_results] == ["chunk-d", "chunk-s"]
 
