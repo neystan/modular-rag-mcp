@@ -28,7 +28,7 @@ def build_query_knowledge_hub_tool(
     def handler(arguments: dict[str, Any]) -> dict[str, object]:
         return query_knowledge_hub(
             arguments.get("query"),
-            top_k=arguments.get("top_k", 5),
+            top_k=arguments.get("top_k"),
             collection=arguments.get("collection"),
             executor=executor,
             response_builder=response_builder,
@@ -55,7 +55,7 @@ def build_query_knowledge_hub_tool(
 def query_knowledge_hub(
     query: Any,
     *,
-    top_k: Any = 5,
+    top_k: Any = None,
     collection: Any = None,
     executor: ToolExecutor | None = None,
     response_builder: ResponseBuilder | None = None,
@@ -65,11 +65,12 @@ def query_knowledge_hub(
     """执行知识库查询并返回 MCP Tool 结果。"""
 
     normalized_query = _normalize_query(query)
-    normalized_top_k = _normalize_top_k(top_k)
     normalized_collection = _normalize_collection(collection)
+    settings = load_settings(settings_path)
+    normalized_top_k = _resolve_top_k(top_k, settings)
     active_builder = response_builder or ResponseBuilder()
     active_assembler = multimodal_assembler or MultimodalAssembler()
-    active_executor = executor or _build_default_executor(settings_path)
+    active_executor = executor or _build_default_executor(settings)
 
     retrieval_results = active_executor(normalized_query, normalized_top_k, normalized_collection)
     payload = active_builder.build(retrieval_results, normalized_query)
@@ -79,8 +80,7 @@ def query_knowledge_hub(
     return payload
 
 
-def _build_default_executor(settings_path: str | Path) -> ToolExecutor:
-    settings = load_settings(settings_path)
+def _build_default_executor(settings: Settings) -> ToolExecutor:
     hybrid_search = HybridSearch(settings)
     reranker = Reranker(settings)
 
@@ -102,6 +102,12 @@ def _normalize_top_k(top_k: Any) -> int:
     if not isinstance(top_k, int) or top_k <= 0:
         raise ProtocolHandlerError("top_k must be positive int")
     return top_k
+
+
+def _resolve_top_k(top_k: Any, settings: Settings) -> int:
+    if top_k is not None:
+        return _normalize_top_k(top_k)
+    return _normalize_top_k(settings.retrieval.get("top_k"))
 
 
 def _normalize_collection(collection: Any) -> str | None:

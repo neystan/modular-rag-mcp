@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from core.query_engine.query_processor import ProcessedQuery
+from core.settings import Settings
 from core.types import RetrievalResult
 from core.trace import TraceContext
 
@@ -178,6 +179,20 @@ def make_result(chunk_id: str, *, collection: str = "manuals", page: int | None 
     return RetrievalResult(chunk_id=chunk_id, score=0.8, text=f"text for {chunk_id}", metadata=metadata)
 
 
+def make_settings(*, top_k: int = 5) -> Settings:
+    return Settings(
+        app={"name": "modular-rag-mcp"},
+        llm={"provider": "placeholder"},
+        embedding={"provider": "placeholder"},
+        splitter={"provider": "placeholder"},
+        vector_store={"provider": "placeholder"},
+        retrieval={"top_k": top_k},
+        rerank={"provider": "none"},
+        evaluation={"provider": "custom"},
+        observability={"log_level": "INFO"},
+    )
+
+
 def make_components(
     *,
     dense_results: list[RetrievalResult] | None = None,
@@ -251,6 +266,31 @@ def test_run_query_verbose_collects_dense_sparse_and_fusion_results() -> None:
     assert components.fusion.calls == [{"dense_ids": ["chunk-d"], "sparse_ids": ["chunk-s"], "top_k": 2}]
     assert components.reranker.calls == []
     assert [item.chunk_id for item in execution.final_results] == ["chunk-d"]
+
+
+def test_run_query_uses_configured_top_k_when_argument_is_omitted() -> None:
+    dense_results = [make_result("chunk-d")]
+    sparse_results = [make_result("chunk-s")]
+    fusion_results = [make_result("chunk-d"), make_result("chunk-s")]
+    components = make_components(
+        dense_results=dense_results,
+        sparse_results=sparse_results,
+        fusion_results=fusion_results,
+        final_results=fusion_results,
+    )
+
+    execution = run_query(
+        "How to configure Azure?",
+        verbose=True,
+        no_rerank=True,
+        settings=make_settings(top_k=2),
+        components=components,
+    )
+
+    assert components.dense_retriever.calls == [{"query": "How to configure Azure?", "top_k": 2, "filters": {}}]
+    assert components.sparse_retriever.calls == [{"keywords": ["configure", "azure"], "top_k": 2}]
+    assert components.fusion.calls == [{"dense_ids": ["chunk-d"], "sparse_ids": ["chunk-s"], "top_k": 2}]
+    assert [item.chunk_id for item in execution.final_results] == ["chunk-d", "chunk-s"]
 
 
 def test_render_execution_returns_friendly_message_when_no_results() -> None:

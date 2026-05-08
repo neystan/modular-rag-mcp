@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="在线查询本地知识库")
     parser.add_argument("--query", required=True, help="查询文本")
-    parser.add_argument("--top-k", type=int, default=10, help="返回结果数量，默认 10")
+    parser.add_argument("--top-k", type=int, default=None, help="返回结果数量，默认读取配置 retrieval.top_k")
     parser.add_argument("--collection", help="按 collection 过滤结果")
     parser.add_argument("--verbose", action="store_true", help="显示各阶段中间结果")
     parser.add_argument("--no-rerank", action="store_true", help="跳过 reranker 阶段")
@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
 def run_query(
     query: str,
     *,
-    top_k: int = 10,
+    top_k: int | None = None,
     collection: str | None = None,
     verbose: bool = False,
     no_rerank: bool = False,
@@ -101,9 +101,9 @@ def run_query(
     """执行一次在线查询。"""
 
     normalized_query = _normalize_query(query)
-    normalized_top_k = _normalize_top_k(top_k)
     normalized_collection = _normalize_collection(collection)
     active_settings = settings or load_settings(settings_path)
+    normalized_top_k = _resolve_top_k(top_k, active_settings)
     active_components = components or build_components(active_settings)
 
     filters = {"collection": normalized_collection} if normalized_collection else None
@@ -277,6 +277,12 @@ def _normalize_top_k(top_k: int) -> int:
     if not isinstance(top_k, int) or top_k <= 0:
         raise ValueError("top_k must be positive int")
     return top_k
+
+
+def _resolve_top_k(top_k: int | None, settings: Settings) -> int:
+    if top_k is not None:
+        return _normalize_top_k(top_k)
+    return _normalize_top_k(settings.retrieval.get("top_k"))
 
 
 def _normalize_collection(collection: str | None) -> str | None:
