@@ -85,6 +85,49 @@ def test_server_handles_initialize_over_stdio_without_polluting_stdout() -> None
     assert "handled initialize request" in stderr_text
 
 
+def test_start_mcp_server_script_handles_initialize_from_any_cwd(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    process = subprocess.Popen(
+        ["uv", "run", "python", str(repo_root / "scripts" / "start_mcp_server.py")],
+        cwd=tmp_path,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        _write_message(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "pytest", "version": "1.0.0"},
+                },
+            },
+        )
+
+        response = _read_message(process.stdout)
+
+        process.stdin.close()
+        exit_code = process.wait(timeout=10)
+        stderr_text = process.stderr.read().decode("utf-8")
+        trailing_stdout = process.stdout.read()
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+    assert exit_code == 0
+    assert response["jsonrpc"] == "2.0"
+    assert response["id"] == 1
+    assert response["result"]["serverInfo"]["name"] == "modular-rag-mcp"
+    assert trailing_stdout == b""
+    assert "handled initialize request" in stderr_text
+
+
 def test_server_returns_method_not_found_for_unknown_request() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     process = subprocess.Popen(
