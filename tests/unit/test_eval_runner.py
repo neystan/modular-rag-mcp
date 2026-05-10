@@ -216,3 +216,25 @@ def test_eval_runner_rejects_invalid_test_set(tmp_path: Path) -> None:
 
     with pytest.raises(EvalRunnerError, match="test_cases"):
         runner.run(test_set_path)
+
+
+def test_eval_runner_reports_progress_per_case(tmp_path: Path) -> None:
+    test_set_path = tmp_path / "golden.json"
+    write_test_set(test_set_path)
+    search = FakeHybridSearch(
+        {
+            "q1": [make_result("chunk-a", "docs/a.pdf")],
+            "q2": [make_result("chunk-b", "docs/b.pdf")],
+        }
+    )
+    evaluator = RecordingEvaluator()
+    runner = EvalRunner(make_settings(), search, evaluator)  # type: ignore[arg-type]
+    updates: list[tuple[int, int, str]] = []
+
+    runner.run_with_progress(test_set_path, progress_callback=lambda c, t, m: updates.append((c, t, m)))
+
+    assert updates[0] == (0, 2, "准备开始评估")
+    assert updates[1] == (0, 2, "评估中：q1")
+    assert updates[2] == (1, 2, "已完成：q1")
+    assert updates[3] == (1, 2, "评估中：q2")
+    assert updates[4] == (2, 2, "已完成：q2")

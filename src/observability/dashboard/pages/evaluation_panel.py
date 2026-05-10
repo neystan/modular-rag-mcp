@@ -76,11 +76,12 @@ def run_dashboard_evaluation(
     backend: str = CONFIGURED_BACKEND,
     settings_loader: Callable[[str | Path], Settings] = load_settings,
     runner_factory: Callable[[Settings], EvalRunner] | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> EvalReport:
     settings = settings_loader(settings_path)
     active_settings = _settings_with_backend(settings, backend)
     runner = runner_factory(active_settings) if runner_factory else _build_default_runner(active_settings)
-    return runner.run(test_set_path)
+    return runner.run_with_progress(test_set_path, progress_callback=progress_callback)
 
 
 def render(
@@ -105,16 +106,29 @@ def render(
     _render_test_set_preview(preview)
 
     if submitted:
+        progress = st.progress(0.0, text="准备开始评估")
+        status = st.empty()
+
+        def _on_progress(current: int, total: int, message: str) -> None:
+            ratio = (current / total) if total else 0.0
+            progress.progress(min(max(ratio, 0.0), 1.0), text=message)
+            status.caption(message)
+
         try:
             report = run_dashboard_evaluation(
                 settings_path=settings_path,
                 test_set_path=test_set_path,
                 backend=str(backend),
                 settings_loader=settings_loader,
+                progress_callback=_on_progress,
             )
         except Exception as exc:  # noqa: BLE001
+            progress.empty()
+            status.empty()
             st.error(f"评估失败：{exc}")
         else:
+            progress.progress(1.0, text="评估完成")
+            status.caption("评估完成")
             _append_history(report, str(backend), test_set_path)
             _render_report(report)
 

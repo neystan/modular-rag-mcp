@@ -41,10 +41,10 @@ class EvaluatorFactory:
     def create(cls, settings: Settings | dict[str, Any]) -> BaseEvaluator:
         """根据 Settings 或 dict 配置创建 Evaluator 实例。"""
 
-        evaluation_config = cls._extract_evaluation_config(settings)
+        evaluation_config = cls._with_runtime_context(settings, cls._extract_evaluation_config(settings))
         backends = evaluation_config.get("backends")
         if backends is not None:
-            return CompositeEvaluator(cls._create_backends(backends, evaluation_config))
+            return CompositeEvaluator(cls._create_backends(backends, evaluation_config, settings))
 
         provider = evaluation_config.get("provider", "custom")
         if not provider:
@@ -67,16 +67,41 @@ class EvaluatorFactory:
         return provider_cls(evaluation_config)
 
     @classmethod
-    def _create_backends(cls, backends: Any, evaluation_config: dict[str, Any]) -> list[BaseEvaluator]:
+    def _create_backends(
+        cls,
+        backends: Any,
+        evaluation_config: dict[str, Any],
+        source_settings: Settings | dict[str, Any],
+    ) -> list[BaseEvaluator]:
         if not isinstance(backends, list) or not backends:
             raise EvaluatorFactoryError("配置项 evaluation.backends 必须是非空 list")
 
         evaluators: list[BaseEvaluator] = []
         for index, backend in enumerate(backends):
             backend_config = cls._normalize_backend_config(backend, evaluation_config, index)
+            backend_config = cls._with_runtime_context(source_settings, backend_config)
             provider = backend_config.get("provider")
             evaluators.append(cls._create_provider(str(provider), backend_config))
         return evaluators
+
+    @staticmethod
+    def _with_runtime_context(
+        settings: Settings | dict[str, Any],
+        evaluation_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        merged = dict(evaluation_config)
+        if isinstance(settings, Settings):
+            merged.setdefault("llm_config", dict(settings.llm))
+            merged.setdefault("embedding_config", dict(settings.embedding))
+            return merged
+        if isinstance(settings, dict):
+            llm_config = settings.get("llm")
+            embedding_config = settings.get("embedding")
+            if isinstance(llm_config, dict):
+                merged.setdefault("llm_config", dict(llm_config))
+            if isinstance(embedding_config, dict):
+                merged.setdefault("embedding_config", dict(embedding_config))
+        return merged
 
     @staticmethod
     def _normalize_backend_config(

@@ -46,8 +46,8 @@ rerank:
   top_k: 2
 
 evaluation:
-  provider: custom
-  enabled: false
+  provider: ragas
+  enabled: true
 
 observability:
   log_level: INFO

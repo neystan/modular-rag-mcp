@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from typing import Any
 
 from libs.evaluator.base_evaluator import BaseEvaluator
@@ -59,7 +60,14 @@ class RagasEvaluator(BaseEvaluator):
                 }
             ]
         )
-        return ragas.evaluate(dataset, metrics=metrics)
+        evaluate_kwargs: dict[str, Any] = {"metrics": metrics}
+        ragas_llm = self._build_ragas_llm()
+        if ragas_llm is not None:
+            evaluate_kwargs["llm"] = ragas_llm
+        ragas_embeddings = self._build_ragas_embeddings()
+        if ragas_embeddings is not None:
+            evaluate_kwargs["embeddings"] = ragas_embeddings
+        return ragas.evaluate(dataset, **evaluate_kwargs)
 
     @staticmethod
     def _import_required(module_name: str) -> Any:
@@ -70,6 +78,68 @@ class RagasEvaluator(BaseEvaluator):
                 "RagasEvaluator requires optional dependencies: install ragas and datasets to use "
                 "evaluation.provider=ragas. Install with: uv add ragas datasets"
             ) from exc
+
+    def _build_ragas_llm(self) -> Any | None:
+        llm_config = self.config.get("llm_config")
+        if not isinstance(llm_config, dict):
+            return None
+
+        provider = str(llm_config.get("provider", "")).strip().lower()
+        model = str(llm_config.get("model", "")).strip()
+        if not provider or not model:
+            return None
+
+        if provider not in {"openai", "qwen", "deepseek"}:
+            raise RagasEvaluatorError(
+                f"ragas evaluator config error: unsupported llm provider for ragas: {provider}"
+            )
+
+        ragas_llms = self._import_required("ragas.llms")
+        openai_module = self._import_required("openai")
+        client = openai_module.OpenAI(
+            api_key=self._resolve_api_key(llm_config),
+            base_url=str(llm_config.get("base_url", "")).strip() or None,
+        )
+        return ragas_llms.llm_factory(
+            model=model,
+            provider="openai",
+            client=client,
+        )
+
+    def _build_ragas_embeddings(self) -> Any | None:
+        embedding_config = self.config.get("embedding_config")
+        if not isinstance(embedding_config, dict):
+            return None
+
+        provider = str(embedding_config.get("provider", "")).strip().lower()
+        model = str(embedding_config.get("model", "")).strip()
+        if not provider or not model:
+            return None
+
+        if provider not in {"openai", "qwen", "deepseek"}:
+            raise RagasEvaluatorError(
+                f"ragas evaluator config error: unsupported embedding provider for ragas: {provider}"
+            )
+
+        ragas_embeddings = self._import_required("ragas.embeddings")
+        openai_module = self._import_required("openai")
+        client = openai_module.OpenAI(
+            api_key=self._resolve_api_key(embedding_config),
+            base_url=str(embedding_config.get("base_url", "")).strip() or None,
+        )
+        return ragas_embeddings.OpenAIEmbeddings(client=client, model=model)
+
+    @staticmethod
+    def _resolve_api_key(config: dict[str, Any]) -> str | None:
+        api_key = str(config.get("api_key", "")).strip()
+        if api_key:
+            return api_key
+        provider = str(config.get("provider", "")).strip().lower()
+        if provider == "qwen":
+            return os.getenv("DASHSCOPE_API_KEY", "").strip() or os.getenv("QWEN_API_KEY", "").strip() or None
+        if provider == "deepseek":
+            return os.getenv("DEEPSEEK_API_KEY", "").strip() or None
+        return os.getenv("OPENAI_API_KEY", "").strip() or None
 
     def _metric_names(self) -> list[str]:
         configured = self.config.get("metrics", self.default_metrics)

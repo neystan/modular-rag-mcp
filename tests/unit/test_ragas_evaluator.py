@@ -30,6 +30,8 @@ def test_factory_creates_ragas_evaluator() -> None:
     evaluator = EvaluatorFactory.create(make_settings())
 
     assert isinstance(evaluator, RagasEvaluator)
+    assert evaluator.config["llm_config"]["provider"] == "placeholder"
+    assert evaluator.config["embedding_config"]["provider"] == "placeholder"
 
 
 def test_observability_module_re_exports_ragas_evaluator() -> None:

@@ -20,7 +20,12 @@ class FakeRunner:
         self.report = report
         self.calls: list[str] = []
 
-    def run(self, test_set_path: str | Path) -> EvalReport:
+    def run_with_progress(
+        self,
+        test_set_path: str | Path,
+        *,
+        progress_callback: object | None = None,
+    ) -> EvalReport:
         self.calls.append(str(test_set_path))
         return self.report
 

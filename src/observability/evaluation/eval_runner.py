@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from core.query_engine.hybrid_search import HybridSearch
 from core.settings import Settings
@@ -74,12 +74,25 @@ class EvalRunner:
         self.llm = llm
 
     def run(self, test_set_path: str | Path) -> EvalReport:
+        return self.run_with_progress(test_set_path)
+
+    def run_with_progress(
+        self,
+        test_set_path: str | Path,
+        *,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> EvalReport:
         cases = self._load_test_cases(test_set_path)
         top_k = self._resolve_top_k()
+        total_cases = len(cases)
+        if progress_callback is not None:
+            progress_callback(0, total_cases, "准备开始评估")
 
         results: list[EvalCaseResult] = []
         metric_totals: dict[str, float] = {}
-        for case in cases:
+        for index, case in enumerate(cases, start=1):
+            if progress_callback is not None:
+                progress_callback(index - 1, total_cases, f"评估中：{case.query}")
             retrieval_results = [] if case.contexts else self.hybrid_search.search(case.query, top_k=top_k)
             retrieved_ids = [item.chunk_id for item in retrieval_results]
             golden_ids = case.expected_chunk_ids or self._matched_source_ids(retrieval_results, case.expected_sources)
@@ -102,6 +115,8 @@ class EvalRunner:
             )
             for key, value in normalized_metrics.items():
                 metric_totals[key] = metric_totals.get(key, 0.0) + value
+            if progress_callback is not None:
+                progress_callback(index, total_cases, f"已完成：{case.query}")
 
         averaged = {key: value / len(results) for key, value in metric_totals.items()}
         return EvalReport(
