@@ -2057,7 +2057,7 @@ dashboard:
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | I1 | E2E：MCP Client 侧调用模拟 | [x] | 2026-05-10 | 新增 `tests/e2e/test_mcp_client.py`，子进程启动 MCP server，覆盖 initialize / tools/list / tools/call |
-| I2 | E2E：Dashboard 冒烟测试 | [ ] | | |
+| I2 | E2E：Dashboard 冒烟测试 | [x] | 2026-05-10 | 新增 `tests/e2e/test_dashboard_smoke.py`，使用 Streamlit `AppTest` 覆盖 6 个页面渲染与无异常冒烟校验 |
 | I3 | 完善 README（运行说明 + MCP + Dashboard） | [ ] | | |
 | I4 | 清理接口一致性（契约测试补齐） | [ ] | | |
 | I5 | 全链路 E2E 验收 | [ ] | | |
@@ -2076,8 +2076,8 @@ dashboard:
 | 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 5 | 100% |
-| 阶段 I | 5 | 1 | 20% |
-| **总计** | **69** | **65** | **94%** |
+| 阶段 I | 5 | 2 | 40% |
+| **总计** | **69** | **66** | **96%** |
 
 ---
 
@@ -3153,7 +3153,8 @@ dashboard:
   - `tests/e2e/test_dashboard_smoke.py`（新增）
 - **实现要点**：
   - 使用 Streamlit 的 `AppTest` 框架进行自动化冒烟测试
-  - 验证 6 个页面均可加载、不抛异常
+  - 为 Overview / Data Browser / Ingestion Manager / Ingestion Traces / Query Traces / Evaluation Panel 注入最小 fake service
+  - 验证 6 个页面均可加载、不抛异常，且标题正确渲染
 - **验收标准**：所有页面冒烟测试通过。
 - **测试方法**：`pytest -q tests/e2e/test_dashboard_smoke.py`。
 
