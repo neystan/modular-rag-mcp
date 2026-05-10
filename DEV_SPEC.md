@@ -2047,7 +2047,7 @@ dashboard:
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | H1 | RagasEvaluator 实现 | [x] | 2026-05-10 | RagasEvaluator + ragas provider 注册 + mock runner 单元测试 |
-| H2 | CompositeEvaluator 实现 | [ ] | | |
+| H2 | CompositeEvaluator 实现 | [x] | 2026-05-10 | CompositeEvaluator + evaluation.backends 配置组合 + 7 个单元测试 |
 | H3 | EvalRunner + Golden Test Set | [ ] | | |
 | H4 | 评估面板页面 | [ ] | | |
 | H5 | Recall 回归测试（E2E） | [ ] | | |
@@ -2075,9 +2075,9 @@ dashboard:
 | 阶段 E | 6 | 6 | 100% |
 | 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 6 | 6 | 100% |
-| 阶段 H | 5 | 1 | 20% |
+| 阶段 H | 5 | 2 | 40% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **60** | **87%** |
+| **总计** | **69** | **61** | **88%** |
 
 ---
 
