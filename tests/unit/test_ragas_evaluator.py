@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from core.settings import Settings
+from libs.embedding.base_embedding import BaseEmbedding
 from libs.evaluator.evaluator_factory import EvaluatorFactory
 from libs.evaluator.ragas_evaluator import RagasEvaluator, RagasEvaluatorError
+from libs.llm.base_llm import BaseLLM
 from observability.evaluation.ragas_evaluator import RagasEvaluator as ObservabilityRagasEvaluator
 
 
@@ -165,3 +168,91 @@ def test_ragas_evaluator_ignores_non_metric_fields_in_response() -> None:
         "faithfulness": 0.91,
         "answer_relevancy": 0.88,
     }
+
+
+class _FakeRagasLLMBase:
+    def __init__(self, run_config: Any = None, multiple_completion_supported: bool = False, cache: Any = None) -> None:
+        self.run_config = run_config
+        self.multiple_completion_supported = multiple_completion_supported
+        self.cache = cache
+
+
+class _FakeLLM(BaseLLM):
+    created_configs: list[dict[str, Any]] = []
+
+    def chat(self, messages: list[dict[str, Any]] | list[Any]) -> str:
+        del messages
+        self.__class__.created_configs.append(dict(self.config))
+        return "generated text"
+
+
+class _FakePrompt:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def to_string(self) -> str:
+        return self._text
+
+
+def test_ragas_evaluator_builds_llm_adapter_with_requested_generation_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    evaluator = RagasEvaluator({"llm_config": {"provider": "qwen", "model": "demo-model"}})
+
+    def fake_import_required(module_name: str) -> Any:
+        if module_name == "ragas.llms.base":
+            return SimpleNamespace(BaseRagasLLM=_FakeRagasLLMBase)
+        if module_name == "libs.llm.llm_factory":
+            return SimpleNamespace(LLMFactory=SimpleNamespace(create=lambda settings: _FakeLLM(settings["llm"])))
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr(evaluator, "_import_required", fake_import_required)
+    _FakeLLM.created_configs.clear()
+
+    adapter = evaluator._build_ragas_llm()
+    result = adapter.generate_text(_FakePrompt("hello"), n=3, temperature=0.2)
+
+    assert adapter.multiple_completion_supported is False
+    assert len(result.generations) == 1
+    assert len(result.generations[0]) == 3
+    assert [item.text for item in result.generations[0]] == ["generated text", "generated text", "generated text"]
+    assert _FakeLLM.created_configs[-1]["temperature"] == 0.2
+    assert _FakeLLM.created_configs[-1]["max_tokens"] == 4096
+
+
+class _FakeRagasEmbeddingsBase:
+    def __init__(self, cache: Any = None) -> None:
+        self.cache = cache
+
+
+class _FakeEmbedding(BaseEmbedding):
+    def embed(self, texts: list[str], trace: Any | None = None) -> list[list[float]]:
+        del trace
+        return [[float(index + 1)] for index, _ in enumerate(texts)]
+
+
+def test_ragas_evaluator_builds_embedding_adapter_with_query_methods(monkeypatch: pytest.MonkeyPatch) -> None:
+    evaluator = RagasEvaluator({"embedding_config": {"provider": "qwen", "model": "embedding-model"}})
+
+    def fake_import_required(module_name: str) -> Any:
+        if module_name == "ragas.embeddings.base":
+            return SimpleNamespace(BaseRagasEmbeddings=_FakeRagasEmbeddingsBase)
+        if module_name == "libs.embedding.embedding_factory":
+            return SimpleNamespace(EmbeddingFactory=SimpleNamespace(create=lambda settings: _FakeEmbedding(settings["embedding"])))
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr(evaluator, "_import_required", fake_import_required)
+
+    adapter = evaluator._build_ragas_embeddings()
+
+    assert adapter.embed_query("query") == [1.0]
+    assert adapter.embed_documents(["a", "b"]) == [[1.0], [2.0]]
+
+
+def test_ragas_evaluator_reduces_answer_relevancy_strictness_by_default() -> None:
+    original_metric = SimpleNamespace(strictness=3)
+    metrics_module = SimpleNamespace(answer_relevancy=original_metric, faithfulness=SimpleNamespace())
+    evaluator = RagasEvaluator({"metrics": ["answer_relevancy", "faithfulness"]})
+
+    built_metrics = evaluator._build_metrics(metrics_module)
+
+    assert built_metrics[0].strictness == 1
+    assert original_metric.strictness == 3

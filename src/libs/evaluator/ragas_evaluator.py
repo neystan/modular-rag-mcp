@@ -2,11 +2,89 @@
 
 from __future__ import annotations
 
+import copy
 import importlib
-import os
+import asyncio
 from typing import Any
 
 from libs.evaluator.base_evaluator import BaseEvaluator
+from libs.embedding.base_embedding import BaseEmbedding
+from libs.llm.base_llm import BaseLLM
+
+
+def _create_ragas_llm_adapter(ragas_base_cls: type[Any], llm: BaseLLM, max_tokens: int | None = None) -> Any:
+    class RagasLLMAdapter(ragas_base_cls):
+        def __init__(self, wrapped_llm: BaseLLM, wrapped_max_tokens: int | None = None) -> None:
+            super().__init__(multiple_completion_supported=False)
+            self._llm = wrapped_llm
+            self._max_tokens = wrapped_max_tokens
+
+        def generate_text(
+            self,
+            prompt: Any,
+            n: int = 1,
+            temperature: float = 0.01,
+            stop: list[str] | None = None,
+            callbacks: Any = None,
+        ) -> Any:
+            del stop, callbacks
+            generation_text = self._invoke_llm(prompt, temperature=temperature)
+            outputs = importlib.import_module("langchain_core.outputs")
+            generations = [[outputs.Generation(text=generation_text) for _ in range(max(1, n))]]
+            return outputs.LLMResult(generations=generations)
+
+        async def agenerate_text(
+            self,
+            prompt: Any,
+            n: int = 1,
+            temperature: float | None = 0.01,
+            stop: list[str] | None = None,
+            callbacks: Any = None,
+        ) -> Any:
+            return await asyncio.to_thread(
+                self.generate_text,
+                prompt,
+                n,
+                0.01 if temperature is None else temperature,
+                stop,
+                callbacks,
+            )
+
+        def is_finished(self, response: Any) -> bool:
+            del response
+            return True
+
+        def _invoke_llm(self, prompt: Any, *, temperature: float) -> str:
+            prompt_text = prompt.to_string() if hasattr(prompt, "to_string") else str(prompt)
+            llm_config = dict(self._llm.config)
+            llm_config["temperature"] = temperature
+            if self._max_tokens is not None and "max_tokens" not in llm_config:
+                llm_config["max_tokens"] = self._max_tokens
+            llm_instance = self._llm.__class__(llm_config)
+            return llm_instance.chat([{"role": "user", "content": prompt_text}])
+
+    return RagasLLMAdapter(llm, wrapped_max_tokens=max_tokens)
+
+
+def _create_ragas_embedding_adapter(ragas_base_cls: type[Any], embedding: BaseEmbedding) -> Any:
+    class RagasEmbeddingAdapter(ragas_base_cls):
+        def __init__(self, wrapped_embedding: BaseEmbedding) -> None:
+            super().__init__()
+            self._embedding = wrapped_embedding
+
+        def embed_query(self, text: str) -> list[float]:
+            return self._embedding.embed([text])[0]
+
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return self._embedding.embed(texts)
+
+        async def aembed_query(self, text: str) -> list[float]:
+            return await asyncio.to_thread(self.embed_query, text)
+
+        async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+            return await asyncio.to_thread(self.embed_documents, texts)
+
+    return RagasEmbeddingAdapter(embedding)
 
 
 class RagasEvaluatorError(RuntimeError):
@@ -47,20 +125,26 @@ class RagasEvaluator(BaseEvaluator):
     ) -> Any:
         ragas = self._import_required("ragas")
         metrics_module = self._import_required("ragas.metrics")
-        datasets = self._import_required("datasets")
+        dataset_schema = self._import_required("ragas.dataset_schema")
+        run_config_module = self._import_required("ragas.run_config")
 
-        metrics = [getattr(metrics_module, name) for name in self._metric_names()]
-        dataset = datasets.Dataset.from_list(
+        metrics = self._build_metrics(metrics_module)
+        dataset = dataset_schema.EvaluationDataset.from_list(
             [
                 {
-                    "question": query,
-                    "answer": answer,
-                    "contexts": contexts,
-                    "ground_truth": reference,
+                    "user_input": query,
+                    "response": answer,
+                    "retrieved_contexts": contexts,
+                    "reference": reference,
                 }
             ]
         )
-        evaluate_kwargs: dict[str, Any] = {"metrics": metrics}
+        evaluate_kwargs: dict[str, Any] = {
+            "metrics": metrics,
+            "show_progress": False,
+            "raise_exceptions": True,
+            "run_config": self._build_run_config(run_config_module),
+        }
         ragas_llm = self._build_ragas_llm()
         if ragas_llm is not None:
             evaluate_kwargs["llm"] = ragas_llm
@@ -79,6 +163,29 @@ class RagasEvaluator(BaseEvaluator):
                 "evaluation.provider=ragas. Install with: uv add ragas datasets"
             ) from exc
 
+    def _build_metrics(self, metrics_module: Any) -> list[Any]:
+        metrics: list[Any] = []
+        for name in self._metric_names():
+            metric = copy.deepcopy(getattr(metrics_module, name))
+            if name == "answer_relevancy" and hasattr(metric, "strictness"):
+                strictness = self.config.get("answer_relevancy_strictness", 1)
+                if isinstance(strictness, int) and strictness > 0:
+                    metric.strictness = strictness
+            metrics.append(metric)
+        return metrics
+
+    def _build_run_config(self, run_config_module: Any) -> Any:
+        timeout = self._positive_int(self.config.get("timeout"), default=60)
+        max_retries = self._non_negative_int(self.config.get("max_retries"), default=1)
+        max_wait = self._positive_int(self.config.get("max_wait"), default=5)
+        max_workers = self._positive_int(self.config.get("max_workers"), default=4)
+        return run_config_module.RunConfig(
+            timeout=timeout,
+            max_retries=max_retries,
+            max_wait=max_wait,
+            max_workers=max_workers,
+        )
+
     def _build_ragas_llm(self) -> Any | None:
         llm_config = self.config.get("llm_config")
         if not isinstance(llm_config, dict):
@@ -89,22 +196,18 @@ class RagasEvaluator(BaseEvaluator):
         if not provider or not model:
             return None
 
-        if provider not in {"openai", "qwen", "deepseek"}:
+        if provider not in {"openai", "qwen", "deepseek", "ollama"}:
             raise RagasEvaluatorError(
                 f"ragas evaluator config error: unsupported llm provider for ragas: {provider}"
             )
 
-        ragas_llms = self._import_required("ragas.llms")
-        openai_module = self._import_required("openai")
-        client = openai_module.OpenAI(
-            api_key=self._resolve_api_key(llm_config),
-            base_url=str(llm_config.get("base_url", "")).strip() or None,
-        )
-        return ragas_llms.llm_factory(
-            model=model,
-            provider="openai",
-            client=client,
-        )
+        ragas_base_llm = self._import_required("ragas.llms.base").BaseRagasLLM
+        llm_factory = self._import_required("libs.llm.llm_factory").LLMFactory
+        llm = llm_factory.create({"llm": llm_config})
+        max_tokens = llm_config.get("max_tokens")
+        if not isinstance(max_tokens, int) or max_tokens <= 0:
+            max_tokens = 4096
+        return _create_ragas_llm_adapter(ragas_base_llm, llm, max_tokens=max_tokens)
 
     def _build_ragas_embeddings(self) -> Any | None:
         embedding_config = self.config.get("embedding_config")
@@ -116,30 +219,15 @@ class RagasEvaluator(BaseEvaluator):
         if not provider or not model:
             return None
 
-        if provider not in {"openai", "qwen", "deepseek"}:
+        if provider not in {"openai", "qwen", "deepseek", "ollama"}:
             raise RagasEvaluatorError(
                 f"ragas evaluator config error: unsupported embedding provider for ragas: {provider}"
             )
 
-        ragas_embeddings = self._import_required("ragas.embeddings")
-        openai_module = self._import_required("openai")
-        client = openai_module.OpenAI(
-            api_key=self._resolve_api_key(embedding_config),
-            base_url=str(embedding_config.get("base_url", "")).strip() or None,
-        )
-        return ragas_embeddings.OpenAIEmbeddings(client=client, model=model)
-
-    @staticmethod
-    def _resolve_api_key(config: dict[str, Any]) -> str | None:
-        api_key = str(config.get("api_key", "")).strip()
-        if api_key:
-            return api_key
-        provider = str(config.get("provider", "")).strip().lower()
-        if provider == "qwen":
-            return os.getenv("DASHSCOPE_API_KEY", "").strip() or os.getenv("QWEN_API_KEY", "").strip() or None
-        if provider == "deepseek":
-            return os.getenv("DEEPSEEK_API_KEY", "").strip() or None
-        return os.getenv("OPENAI_API_KEY", "").strip() or None
+        ragas_base_embeddings = self._import_required("ragas.embeddings.base").BaseRagasEmbeddings
+        embedding_factory = self._import_required("libs.embedding.embedding_factory").EmbeddingFactory
+        embedding = embedding_factory.create({"embedding": embedding_config})
+        return _create_ragas_embedding_adapter(ragas_base_embeddings, embedding)
 
     def _metric_names(self) -> list[str]:
         configured = self.config.get("metrics", self.default_metrics)
@@ -234,3 +322,11 @@ class RagasEvaluator(BaseEvaluator):
         if not metrics:
             raise RagasEvaluatorError("ragas evaluator response error: metrics are empty")
         return metrics
+
+    @staticmethod
+    def _positive_int(value: Any, *, default: int) -> int:
+        return value if isinstance(value, int) and value > 0 else default
+
+    @staticmethod
+    def _non_negative_int(value: Any, *, default: int) -> int:
+        return value if isinstance(value, int) and value >= 0 else default
