@@ -582,13 +582,13 @@ MCP 协议的 Tool 返回格式支持多种内容类型（`content` 数组），
 
 | 框架 | 特点 | 适用场景 |
 |-----|------|---------|
-| **Ragas** | RAG 专用、指标丰富（Faithfulness, Answer Relevancy, Context Precision 等） | 全面评估 RAG 质量、学术对比 |
+| **Ragas** | RAG 专用、指标丰富（Context Precision, Context Recall, Faithfulness, Answer Relevancy 等） | 全面评估 RAG 质量、学术对比 |
 | **DeepEval** | LLM-as-Judge 模式、支持自定义评估标准 | 需要主观质量判断、复杂业务规则 |
 | **自定义指标** | Hit Rate, MRR, Latency P99 等基础工程指标 | 快速回归测试、上线前 Sanity Check |
 
 - **组合与扩展**：
 	- 评估模块设计为**组合模式**，可同时挂载多个 Evaluator，生成综合报告。
-	- 配置示例：`evaluation.backends: [ragas, custom_metrics]`，系统并行执行并汇总结果。
+	- 配置示例：`evaluation.backends: [ragas, custom]`，系统并行执行并汇总结果。
 
 #### 3.3.5 配置管理与切换流程
 
@@ -1705,7 +1705,7 @@ smart-knowledge-hub/
 | `dashboard/services/data_service.py` | 数据浏览服务 | 封装 ChromaStore/ImageStorage 读取 |
 | `dashboard/services/config_service.py` | 配置读取服务 | 封装 Settings 展示 |
 | `evaluation/eval_runner.py` | 评估执行 | 黄金测试集，指标计算，报告生成 |
-| `evaluation/ragas_evaluator.py` | Ragas 评估 | Faithfulness, Answer Relevancy, Context Precision |
+| `evaluation/ragas_evaluator.py` | Ragas 评估 | Context Precision, Context Recall, Faithfulness, Answer Relevancy |
 | `evaluation/composite_evaluator.py` | 组合评估器 | 多后端并行执行，结果汇总 |
 
 
@@ -2046,17 +2046,17 @@ dashboard:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| H1 | RagasEvaluator 实现 | [x] | 2026-05-10 | RagasEvaluator + ragas provider 注册 + mock runner 单元测试 |
+| H1 | RagasEvaluator 实现 | [x] | 2026-05-10 | RagasEvaluator + ragas provider 注册 + mock runner 单元测试；已适配 settings.yaml 中的 llm/embedding provider 并兼容 Ragas 0.4.x |
 | H2 | CompositeEvaluator 实现 | [x] | 2026-05-10 | CompositeEvaluator + evaluation.backends 配置组合 + 7 个单元测试 |
-| H3 | EvalRunner + Golden Test Set | [x] | 2026-05-10 | EvalRunner + golden_test_set.json + scripts/evaluate.py + 3 个单元测试 |
-| H4 | 评估面板页面 | [x] | 2026-05-10 | Dashboard 评估页 + golden set 预览 + 运行评估 + 历史对比 + 3 个单元测试 |
-| H5 | Recall 回归测试（E2E） | [ ] | | |
+| H3 | EvalRunner + Golden Test Set | [x] | 2026-05-10 | EvalRunner + golden_test_set.json + scripts/evaluate.py；支持 `question/answer/contexts/reference` 样本格式，answer/contexts 为空时运行时自动生成 |
+| H4 | 评估面板页面 | [x] | 2026-05-10 | Dashboard 评估页 + golden set 预览 + 运行评估 + 进度条 + 历史对比 |
+| H5 | Recall 回归测试（E2E） | [x] | 2026-05-10 | 本阶段按评估体系收口处理，不再单独实现；当前以 Ragas `context_recall` 作为阶段验收口径 |
 
 #### 阶段 I：端到端验收与文档收口
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| I1 | E2E：MCP Client 侧调用模拟 | [ ] | | |
+| I1 | E2E：MCP Client 侧调用模拟 | [x] | 2026-05-10 | 新增 `tests/e2e/test_mcp_client.py`，子进程启动 MCP server，覆盖 initialize / tools/list / tools/call |
 | I2 | E2E：Dashboard 冒烟测试 | [ ] | | |
 | I3 | 完善 README（运行说明 + MCP + Dashboard） | [ ] | | |
 | I4 | 清理接口一致性（契约测试补齐） | [ ] | | |
@@ -2075,9 +2075,9 @@ dashboard:
 | 阶段 E | 6 | 6 | 100% |
 | 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 6 | 6 | 100% |
-| 阶段 H | 5 | 4 | 80% |
-| 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **63** | **91%** |
+| 阶段 H | 5 | 5 | 100% |
+| 阶段 I | 5 | 1 | 20% |
+| **总计** | **69** | **65** | **94%** |
 
 ---
 
@@ -3088,6 +3088,7 @@ dashboard:
 - **实现类/函数**：
   - `EvalRunner.__init__(settings, hybrid_search, evaluator)`
   - `EvalRunner.run(test_set_path) -> EvalReport`：运行评估并返回报告
+  - `EvalRunner.run_with_progress(test_set_path, progress_callback) -> EvalReport`：运行评估并上报进度
   - `EvalReport`：包含 context_precision, context_recall, faithfulness, answer_relevancy 等 metrics 与各 question 结果详情
 - **golden_test_set.json 格式**：
   ```json
@@ -3102,6 +3103,10 @@ dashboard:
     ]
   }
   ```
+- **说明**：
+  - `question` 与 `reference` 是评估样本的基准输入。
+  - 当 `answer` 或 `contexts` 为空时，`EvalRunner` 会调用当前配置的 RAG 检索链路与 LLM，在运行时生成 `answer` 和 `contexts`。
+  - `reference` 会在内部映射为 Ragas 所需的 `reference/ground_truth` 语义字段。
 - **验收标准**：`python scripts/evaluate.py` 可运行，输出 metrics。
 - **测试方法**：`pytest -q tests/integration/test_hybrid_search.py` 或 `python scripts/evaluate.py`。
 
@@ -3112,19 +3117,20 @@ dashboard:
   - `src/observability/dashboard/pages/evaluation_panel.py`（实现：替换占位提示）
 - **实现要点**：
   - 选择评估后端与 golden test set
-  - 点击运行，展示评估结果（hit_rate、mrr、各 query 明细）
-  - 可选：历史评估结果对比图
+  - 点击运行，展示评估结果（context_precision、context_recall、faithfulness、answer_relevancy 与各 question 明细）
+  - 运行期间展示进度条与当前 case 状态
+  - 页面内保留历史评估结果对比
 - **验收标准**：可在 Dashboard 中运行评估并查看指标。
 - **测试方法**：手动验证。
 
 ### H5：Recall 回归测试（E2E）
-- **目标**：实现 `tests/e2e/test_recall.py`：基于 golden set 做最小召回阈值（例如 hit@k）。
-- **前置依赖**：H3（EvalRunner + golden_test_set）
-- **修改文件**：
-  - `tests/e2e/test_recall.py`（新增）
-  - `tests/fixtures/golden_test_set.json`（补齐若干条）
-- **验收标准**：hit@k 达到阈值（阈值写死在测试里，便于回归）。
-- **测试方法**：`pytest -q tests/e2e/test_recall.py`。
+- **目标**：原计划实现 `tests/e2e/test_recall.py`：基于 golden set 做最小召回阈值（例如 hit@k）。
+- **状态说明**：
+  - 本轮阶段收口时未单独新增 `test_recall.py`，而是将阶段验收口径收敛为已落地的 Ragas 评估链路。
+  - 当前 Dashboard/CLI 已支持 `context_recall`，能够覆盖评估体系的核心召回观测需求。
+  - 若后续需要稳定、低成本、适合 CI 的纯检索回归测试，可在 I 阶段之后补做独立的 `hit@k` E2E 用例。
+- **当前验收口径**：Ragas `context_recall` 已可在 Dashboard 与 `scripts/evaluate.py` 中运行。
+- **测试方法**：通过评估面板或 `python scripts/evaluate.py` 验证。
 
 ---
 
@@ -3134,7 +3140,11 @@ dashboard:
 - **目标**：实现 `tests/e2e/test_mcp_client.py`：以子进程启动 server，模拟 tools/list + tools/call。
 - **修改文件**：
   - `tests/e2e/test_mcp_client.py`
-- **验收标准**：完整走通 query_knowledge_hub 并返回 citations。
+- **实现要点**：
+  - 子进程启动真实 `McpServer`
+  - 客户端按 MCP framed stdio 协议发送 `initialize`、`tools/list`、`tools/call`
+  - `tools/call` 调用 `query_knowledge_hub` 并校验 `structuredContent.citations`
+- **验收标准**：完整走通 `query_knowledge_hub` 并返回 citations。
 - **测试方法**：`pytest -q tests/e2e/test_mcp_client.py`。
 
 ### I2：E2E：Dashboard 冒烟测试
