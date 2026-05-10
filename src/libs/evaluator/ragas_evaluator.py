@@ -36,7 +36,7 @@ class RagasEvaluator(BaseEvaluator):
         else:
             result = self._run_ragas(normalized_query, answer, contexts, reference)
 
-        return self._normalize_metrics(result)
+        return self._normalize_metrics(result, self._metric_names())
 
     def _run_ragas(
         self,
@@ -201,7 +201,7 @@ class RagasEvaluator(BaseEvaluator):
         raise RagasEvaluatorError("ragas evaluator input error: reference is required")
 
     @staticmethod
-    def _normalize_metrics(result: Any) -> dict[str, float]:
+    def _normalize_metrics(result: Any, metric_names: list[str]) -> dict[str, float]:
         if hasattr(result, "to_pandas"):
             frame = result.to_pandas()
             if hasattr(frame, "to_dict"):
@@ -218,13 +218,15 @@ class RagasEvaluator(BaseEvaluator):
                 raise RagasEvaluatorError("ragas evaluator response error: metrics must be mapping") from exc
 
         metrics: dict[str, float] = {}
-        for key, value in result.items():
-            if key in {"question", "answer", "contexts", "ground_truth", "reference"}:
+        expected_keys = {str(name).strip() for name in metric_names if str(name).strip()}
+        for key in expected_keys:
+            if key not in result:
                 continue
+            value = result[key]
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]
             try:
-                metrics[str(key)] = float(value)
+                metrics[key] = float(value)
             except (TypeError, ValueError) as exc:
                 raise RagasEvaluatorError(
                     f"ragas evaluator response error: metric {key} must be numeric"

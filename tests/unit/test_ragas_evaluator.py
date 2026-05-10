@@ -136,3 +136,32 @@ def test_ragas_evaluator_requires_reference() -> None:
 
     with pytest.raises(RagasEvaluatorError, match="reference is required"):
         evaluator.evaluate("query", ["context"], [], trace={"answer": "answer"})
+
+
+def test_ragas_evaluator_ignores_non_metric_fields_in_response() -> None:
+    evaluator = RagasEvaluator(
+        {
+            "runner": lambda *args: {
+                "user_input": "question",
+                "retrieved_contexts": ["context"],
+                "context_precision": 0.75,
+                "context_recall": 0.66,
+                "faithfulness": 0.91,
+                "answer_relevancy": 0.88,
+            }
+        }
+    )
+
+    metrics = evaluator.evaluate(
+        "query",
+        ["context"],
+        [],
+        trace={"answer": "answer", "reference": "reference", "contexts": ["context"]},
+    )
+
+    assert metrics == {
+        "context_precision": 0.75,
+        "context_recall": 0.66,
+        "faithfulness": 0.91,
+        "answer_relevancy": 0.88,
+    }
