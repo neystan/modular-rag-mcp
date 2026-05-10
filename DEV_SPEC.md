@@ -470,8 +470,8 @@ MCP 协议的 Tool 返回格式支持多种内容类型（`content` 数组），
 - **统一接口层 (Unified API Abstraction)**：
 	- **设计思路**：无论底层使用 Azure OpenAI、OpenAI 原生 API、DeepSeek 还是本地 Ollama，上层调用代码应保持一致。
 	- **关键抽象**：
-		- `LLMClient`：暴露 `chat(messages) -> response` 方法，屏蔽不同 Provider 的认证方式与请求格式差异。
-		- `EmbeddingClient`：暴露 `embed(texts) -> vectors` 方法，统一处理批量请求与维度归一化。
+		- `BaseLLM`：暴露 `chat(messages) -> response` 方法，屏蔽不同 Provider 的认证方式与请求格式差异。
+		- `BaseEmbedding`：暴露 `embed(texts) -> vectors` 方法，统一处理批量请求与维度归一化。
 
 - **提供者选项与切换场景**：
 
@@ -1499,8 +1499,10 @@ smart-knowledge-hub/
 │   │   │   ├── openai_llm.py            # OpenAI 实现
 │   │   │   ├── ollama_llm.py            # Ollama 本地模型实现
 │   │   │   ├── deepseek_llm.py          # DeepSeek 实现
+│   │   │   ├── qwen_llm.py              # Qwen OpenAI-compatible 实现
 │   │   │   ├── base_vision_llm.py       # Vision LLM 抽象基类（支持图像输入）
-│   │   │   └── azure_vision_llm.py      # Azure Vision 实现 (GPT-4o/GPT-4-Vision)
+│   │   │   ├── azure_vision_llm.py      # Azure Vision 实现 (GPT-4o/GPT-4-Vision)
+│   │   │   └── qwen_vision_llm.py       # Qwen Vision 实现
 │   │   │
 │   │   ├── embedding/                   # Embedding 抽象
 │   │   │   ├── __init__.py
@@ -1508,6 +1510,7 @@ smart-knowledge-hub/
 │   │   │   ├── embedding_factory.py     # Embedding 工厂
 │   │   │   ├── openai_embedding.py      # OpenAI Embedding 实现
 │   │   │   ├── azure_embedding.py       # Azure Embedding 实现
+│   │   │   ├── qwen_embedding.py        # Qwen Embedding 实现
 │   │   │   └── ollama_embedding.py      # Ollama 本地模型实现
 │   │   │
 │   │   ├── splitter/                    # Splitter 抽象 (切分策略)
@@ -1529,7 +1532,8 @@ smart-knowledge-hub/
 │   │   │   ├── base_reranker.py         # Reranker 抽象基类
 │   │   │   ├── reranker_factory.py      # Reranker 工厂
 │   │   │   ├── cross_encoder_reranker.py# CrossEncoder 实现
-│   │   │   └── llm_reranker.py          # LLM Rerank 实现
+│   │   │   ├── llm_reranker.py          # LLM Rerank 实现
+│   │   │   └── qwen_reranker.py         # Qwen DashScope Rerank 实现
 │   │   │
 │   │   └── evaluator/                   # Evaluator 抽象
 │   │       ├── __init__.py
@@ -1607,8 +1611,8 @@ smart-knowledge-hub/
 │   │   └── test_mcp_server.py           # E1-E6: MCP 服务器集成测试
 │   ├── e2e/                             # 端到端测试
 │   │   ├── test_data_ingestion.py
-│   │   ├── test_recall.py               # G2: 召回回归测试
-│   │   └── test_mcp_client.py           # G1: MCP Client 模拟测试
+│   │   ├── test_mcp_client.py           # I1: MCP Client 模拟测试
+│   │   └── test_dashboard_smoke.py      # I2: Dashboard 冒烟测试
 │   └── fixtures/                        # 测试数据
 │       ├── sample_documents/
 │       └── golden_test_set.json         # F5/G2: 黄金测试集
@@ -1617,11 +1621,13 @@ smart-knowledge-hub/
 │   ├── ingest.py                        # 数据摄取脚本（离线摄取入口）
 │   ├── query.py                         # 查询测试脚本（在线查询入口）
 │   ├── evaluate.py                      # 评估运行脚本
-│   └── start_dashboard.py               # Dashboard 启动脚本
+│   ├── start_dashboard.py               # Dashboard 启动脚本
+│   ├── start_mcp_server.py              # MCP Server 启动脚本
+│   └── debug_mcp_stdio.py               # MCP stdio 调试脚本
 │
 ├── main.py                              # MCP Server 启动入口
 ├── pyproject.toml                       # Python 项目配置
-├── requirements.txt                     # 依赖列表
+├── uv.lock                              # uv 依赖锁文件
 └── README.md                            # 项目说明
 ```
 
@@ -1631,7 +1637,7 @@ smart-knowledge-hub/
 
 | 模块 | 职责 | 关键技术点 |
 |-----|-----|----------|
-| `server.py` | MCP Server 主入口，处理 Stdio Transport 通信 | Python MCP SDK，JSON-RPC 2.0 |
+| `server.py` | MCP Server 主入口，处理 Stdio Transport 通信 | 自定义 framed/jsonl stdio 传输，JSON-RPC 2.0 |
 | `protocol_handler.py` | 协议解析与能力协商 | `initialize`、`tools/list`、`tools/call` |
 | `tools/*` | 对外暴露的工具函数实现 | 装饰器定义，参数校验，响应格式化 |
 
@@ -1641,12 +1647,12 @@ smart-knowledge-hub/
 |-----|-----|----------|
 | `settings.py` | 配置加载与校验 | 读取 `config/settings.yaml`，解析为 `Settings`，必填字段校验（fail-fast） |
 | `types.py` | 核心数据类型/契约（全链路复用） | 定义 `Document/Chunk/ChunkRecord/ProcessedQuery/RetrievalResult`；序列化稳定；作为 ingestion/retrieval/mcp 的数据契约中心 |
-| `query_processor.py` | 查询预处理 | 关键词提取、同义词扩展、Metadata 解析 |
+| `query_processor.py` | 查询预处理 | 关键词提取、停用词过滤、基础 filters 结构预留 |
 | `hybrid_search.py` | 混合检索编排 | 并行 Dense/Sparse 召回，结果融合，Metadata 过滤 |
 | `dense_retriever.py` | 语义向量检索 | Query Embedding + VectorStore 检索，Cosine Similarity |
 | `sparse_retriever.py` | BM25 关键词检索 | 倒排索引查询，TF-IDF 打分 |
 | `fusion.py` | 结果融合 | RRF 算法，排名倒数加权 |
-| `reranker.py` | 精排重排 | CrossEncoder / LLM Rerank / Fallback 回退 |
+| `reranker.py` | 精排重排 | None / CrossEncoder / LLM / Qwen Rerank 调度与回退 |
 | `response_builder.py` | 响应构建 | MCP 响应格式化，Markdown 生成 |
 | `citation_generator.py` | 引用生成 | 从检索结果生成结构化引用列表 |
 | `multimodal_assembler.py` | 多模态组装 | Text + Image Base64 编码，MCP 多内容类型 |
@@ -1661,6 +1667,8 @@ smart-knowledge-hub/
 | `query.py` | 在线查询测试入口 | CLI 参数解析，调用 HybridSearch + Reranker，支持 `--query`/`--top-k`/`--verbose` |
 | `evaluate.py` | 评估运行入口 | 加载 golden_test_set，运行评估，输出 metrics |
 | `start_dashboard.py` | Dashboard 启动入口 | Streamlit 应用启动 |
+| `start_mcp_server.py` | MCP Server 启动入口 | 自动切换到仓库根目录，启动 stdio server |
+| `debug_mcp_stdio.py` | MCP 调试工具 | 手动检查 stdio 输入输出与 framed/jsonl 协议行为 |
 
 #### 5.3.4 Ingestion Pipeline 层
 
@@ -1680,17 +1688,17 @@ smart-knowledge-hub/
 
 #### 5.3.5 Libs 层 (可插拔抽象)
 
-| 抽象接口 | 当前默认实现 | 可替换选项 |
+| 抽象接口 | 当前项目实现/示例配置 | 可替换选项 |
 |---------|------------|----------|
-| `LLMClient` | Azure OpenAI | OpenAI / Ollama / DeepSeek |
-| `VisionLLMClient` | Azure OpenAI Vision (GPT-4o) | OpenAI Vision / Ollama Vision (LLaVA) |
-| `EmbeddingClient` | OpenAI text-embedding-3 | BGE / Ollama 本地模型 |
+| `BaseLLM` | 按 `settings.yaml` 配置创建（当前示例为 Qwen OpenAI-compatible） | OpenAI / Azure / DeepSeek / Ollama / Qwen |
+| `BaseVisionLLM` | 按 `settings.yaml` 配置创建（当前支持 Azure / Qwen） | Azure Vision / Qwen Vision |
+| `BaseEmbedding` | 按 `settings.yaml` 配置创建（当前示例为 Qwen Embedding） | OpenAI / Azure / Ollama / Qwen |
 | `Loader` | PDF Loader（MarkItDown） | Markdown/HTML/Code Loader 等 |
 | `FileIntegrity` | SQLite (`data/db/ingestion_history.db`) | Redis（分布式）/ PostgreSQL（企业级）/ JSON文件（测试） |
 | `Splitter` | RecursiveCharacterTextSplitter | Semantic / FixedLen |
 | `VectorStore` | Chroma | Qdrant / Pinecone / Milvus |
-| `Reranker` | CrossEncoder | LLM Rerank / None (关闭) |
-| `Evaluator` | Ragas | DeepEval / 自定义指标 |
+| `Reranker` | 按 `settings.yaml` 配置创建（当前示例为 Qwen Rerank） | None / CrossEncoder / LLM / Qwen |
+| `Evaluator` | `ragas` + `custom` 可组合 | Ragas / 自定义指标 / 组合后端 |
 
 #### 5.3.6 Observability 层
 
@@ -1705,7 +1713,7 @@ smart-knowledge-hub/
 | `dashboard/pages/ingestion_manager.py` | Ingestion 管理 | 文件上传，摄取触发（进度条），文档删除 |
 | `dashboard/pages/ingestion_traces.py` | Ingestion 追踪 | 摄取历史，阶段耗时瀑布图 |
 | `dashboard/pages/query_traces.py` | Query 追踪 | 查询历史，Dense/Sparse 对比，Rerank 变化 |
-| `dashboard/pages/evaluation_panel.py` | 评估面板 | 运行评估，指标展示，历史趋势（Phase H 实现） |
+| `dashboard/pages/evaluation_panel.py` | 评估面板 | 运行评估，进度条，指标展示，历史趋势 |
 | `dashboard/services/trace_service.py` | Trace 数据服务 | 解析 traces.jsonl，按 trace_type 分类 |
 | `dashboard/services/data_service.py` | 数据浏览服务 | 封装 ChromaStore/ImageStorage 读取 |
 | `dashboard/services/config_service.py` | 配置读取服务 | 封装 Settings 展示 |
@@ -1771,7 +1779,7 @@ smart-knowledge-hub/
          │ query + params
          ▼
 ┌─────────────────┐
-│ Query Processor │  关键词提取 + 同义词扩展 + Metadata 解析
+│ Query Processor │  关键词提取 + 停用词过滤 + 基础 filters 结构
 │                 │
 └────────┬────────┘
          │ processed_query + filters
@@ -1938,7 +1946,7 @@ dashboard:
 6. **阶段 F：Trace 基础设施与打点**
    - 目的：增强 TraceContext，实现结构化日志持久化，在 Ingestion + Query 双链路打点，添加 Pipeline 进度回调。
 7. **阶段 G：可视化管理平台 Dashboard**
-   - 目的：搭建 Streamlit 六页面管理平台（系统总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估占位），实现 DocumentManager 跨存储协调。
+   - 目的：搭建 Streamlit 六页面管理平台（系统总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估面板），实现 DocumentManager 跨存储协调。
 8. **阶段 H：评估体系**
    - 目的：实现 RagasEvaluator + CompositeEvaluator + EvalRunner，启用评估面板页面，建立 golden test set 回归基线。
 9. **阶段 I：端到端验收与文档收口**
@@ -2701,7 +2709,7 @@ dashboard:
 - **测试方法**：`pytest -q tests/unit/test_query_processor.py`。
 
 ### D2：DenseRetriever（调用 VectorStore.query）
-- **目标**：实现 `dense_retriever.py`，组合 `EmbeddingClient`（query 向量化）+ `VectorStore`（向量检索），完成语义召回。
+- **目标**：实现 `dense_retriever.py`，组合 `BaseEmbedding` / `EmbeddingFactory`（query 向量化）+ `VectorStore`（向量检索），完成语义召回。
 - **前置任务**：
   1. 需先在 `src/core/types.py` 中定义 `RetrievalResult` 类型（包含 `chunk_id`, `score`, `text`, `metadata` 字段）
   2. 需确认 ChromaStore.query() 返回结果包含 text（当前存储在 documents 字段，需补充返回）
@@ -2720,7 +2728,7 @@ dashboard:
   - ChromaStore.query() 返回结果包含 `text` 字段
   - 对输入 query 能生成 embedding 并调用 VectorStore 检索
   - 返回结果包含 `chunk_id`、`score`、`text`、`metadata`
-  - mock EmbeddingClient 和 VectorStore 时能正确编排调用
+  - mock Embedding provider 和 VectorStore 时能正确编排调用
 - **测试方法**：`pytest -q tests/unit/test_dense_retriever.py`（mock embedding + vector store）。
 
 ### D3：SparseRetriever（BM25 查询）
@@ -2798,7 +2806,7 @@ dashboard:
     - Verbose 模式：额外显示 Dense 召回结果、Sparse 召回结果、Fusion 结果、Rerank 结果
   - **内部流程**：
     1. 加载配置 `Settings`
-    2. 初始化组件（EmbeddingClient、VectorStore、BM25Indexer、Reranker）
+    2. 初始化组件（Embedding provider、VectorStore、BM25Indexer、Reranker）
     3. 创建 `QueryProcessor`、`DenseRetriever`、`SparseRetriever`、`HybridSearch` 实例
     4. 调用 `HybridSearch.search()` 获取候选结果
     5. 调用 `Reranker.rerank()` 进行精排（除非 `--no-rerank`）
@@ -2978,7 +2986,7 @@ dashboard:
   - `src/observability/dashboard/services/config_service.py`（新增：配置读取服务）
   - `scripts/start_dashboard.py`（新增：Dashboard 启动脚本）
 - **实现要点**：
-  - `app.py` 使用 `st.navigation()` 注册六个页面（未完成的页面显示占位提示）
+  - `app.py` 使用 `st.navigation()` 注册六个页面
   - Overview 页面：读取 `Settings` 展示组件卡片，调用 `ChromaStore.get_collection_stats()` 展示数据统计
   - `ConfigService`：封装 Settings 读取，格式化组件配置信息
 - **验收标准**：`uv run streamlit run src/observability/dashboard/app.py` 可启动，总览页展示当前配置信息。
