@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import copy
 import math
+import re
 from collections import Counter
 from typing import Any
 
-from core.tokenization import tokenize_mixed_text
+import jieba
+
 from core.trace import TraceContext
 from core.types import Chunk, ChunkRecord
+
+# 关闭 jieba 的 debug 日志
+jieba.setLogLevel(jieba.logging.INFO)
+
+# 英文/数字 token 规则（中文交给 jieba）
+ENGLISH_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 
 
 class SparseEncoder:
@@ -47,7 +55,24 @@ class SparseEncoder:
     def _tokenize(cls, text: str) -> list[str]:
         if not isinstance(text, str):
             raise TypeError("sparse encoder input error: text must be string")
-        return tokenize_mixed_text(text)
+        tokens: list[str] = []
+        # jieba 对中文分词
+        for word in jieba.cut(text):
+            word = word.strip().lower()
+            if not word:
+                continue
+            # 跳过纯标点和空白
+            if not any(c.isalnum() or c == "_" or c == "-" for c in word):
+                continue
+            # 英文 token 进一步规范化
+            for match in ENGLISH_TOKEN_PATTERN.finditer(word):
+                tokens.append(match.group().lower())
+            # 如果是纯中文词（jieba 分出的），直接加入
+            if ENGLISH_TOKEN_PATTERN.fullmatch(word):
+                continue  # 英文已处理
+            if word and not ENGLISH_TOKEN_PATTERN.fullmatch(word):
+                tokens.append(word)
+        return tokens
 
     @staticmethod
     def _build_sparse_vector(term_counts: Counter[str]) -> dict[str, float]:

@@ -8,6 +8,7 @@ from core.settings import Settings
 from libs.reranker.base_reranker import BaseReranker, NoneReranker
 from libs.reranker.cross_encoder_reranker import CrossEncoderReranker
 from libs.reranker.llm_reranker import LLMReranker
+from libs.reranker.qwen_reranker import QwenReranker
 
 
 class RerankerFactoryError(ValueError):
@@ -24,6 +25,7 @@ class RerankerFactory:
         "none": NoneReranker,
         "llm": LLMReranker,
         "cross_encoder": CrossEncoderReranker,
+        "qwen": QwenReranker,
     }
 
     @classmethod
@@ -62,6 +64,7 @@ class RerankerFactory:
 
         cls._providers = {"none": NoneReranker, "llm": LLMReranker}
         cls._providers["cross_encoder"] = CrossEncoderReranker
+        cls._providers["qwen"] = QwenReranker
 
     @staticmethod
     def _extract_rerank_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:

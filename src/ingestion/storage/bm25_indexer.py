@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import math
 import pickle
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.tokenization import tokenize_mixed_text
+import jieba
+
 from core.types import ChunkRecord
+
+# 关闭 jieba 的 debug 日志
+jieba.setLogLevel(jieba.logging.INFO)
+
+# 英文/数字 token 规则（中文交给 jieba）
+ENGLISH_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 
 
 class BM25IndexerError(RuntimeError):
@@ -26,6 +34,7 @@ class BM25QueryResult:
 
 class BM25Indexer:
     """维护可落盘的 BM25 倒排索引。"""
+
     default_index_file = "bm25_index.pkl"
 
     def __init__(self, index_dir: str | Path = "data/db/bm25") -> None:
@@ -148,16 +157,23 @@ class BM25Indexer:
     @classmethod
     def _tokenize(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, list):
-            tokens: list[str] = []
-            for item in value:
-                text = str(item).strip()
-                if not text:
-                    continue
-                tokens.extend(tokenize_mixed_text(text))
-            return tokens
+            return [str(token).lower() for token in value if str(token)]
         if not isinstance(value, str):
             raise BM25IndexerError("bm25 tokenize error: query must be string or list[str]")
-        return tokenize_mixed_text(value)
+        tokens: list[str] = []
+        for word in jieba.cut(value):
+            word = word.strip().lower()
+            if not word:
+                continue
+            if not any(c.isalnum() or c == "_" or c == "-" for c in word):
+                continue
+            for match in ENGLISH_TOKEN_PATTERN.finditer(word):
+                tokens.append(match.group().lower())
+            if ENGLISH_TOKEN_PATTERN.fullmatch(word):
+                continue
+            if word and not ENGLISH_TOKEN_PATTERN.fullmatch(word):
+                tokens.append(word)
+        return tokens
 
     @staticmethod
     def _document_payload(record: ChunkRecord) -> dict[str, Any]:

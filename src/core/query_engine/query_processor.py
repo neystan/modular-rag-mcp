@@ -6,9 +6,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+import jieba
+
 from core.settings import Settings
-from core.tokenization import expand_cjk_query_token
 from core.trace import TraceContext
+
+# 关闭 jieba 的 debug 日志
+jieba.setLogLevel(jieba.logging.INFO)
+
+# 英文/数字 token 规则（中文交给 jieba）
+ENGLISH_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 
 
 DEFAULT_STOPWORDS = {
@@ -37,6 +44,34 @@ DEFAULT_STOPWORDS = {
     "那个",
     "请问",
     "一下",
+    "是",
+    "的",
+    "了",
+    "在",
+    "我",
+    "有",
+    "和",
+    "就",
+    "不",
+    "人",
+    "都",
+    "一",
+    "一个",
+    "上",
+    "也",
+    "很",
+    "到",
+    "说",
+    "要",
+    "去",
+    "你",
+    "会",
+    "着",
+    "没有",
+    "看",
+    "好",
+    "自己",
+    "这",
 }
 CHINESE_PREFIX_STOPWORDS = ("如何", "请问", "关于", "什么是", "怎么")
 
@@ -86,15 +121,30 @@ class QueryProcessor:
     def _extract_keywords(self, query: str) -> list[str]:
         seen: set[str] = set()
         keywords: list[str] = []
-        for token in re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]*", query):
-            normalized = self._normalize_token(token)
-            if not normalized:
+        for word in jieba.cut(query):
+            word = word.strip().lower()
+            if not word:
                 continue
-            for expanded in self._expand_keyword(normalized):
-                if not expanded or expanded in self.stopwords or expanded in seen:
+            # 跳过纯标点和空白
+            if not any(c.isalnum() or c == "_" or c == "-" for c in word):
+                continue
+            # 英文 token 进一步规范化
+            english_matches = ENGLISH_TOKEN_PATTERN.findall(word)
+            if english_matches:
+                for match in english_matches:
+                    normalized = self._normalize_token(match.lower())
+                    if normalized and normalized not in self.stopwords and normalized not in seen:
+                        keywords.append(normalized)
+                        seen.add(normalized)
+                # 如果英文 token 覆盖了整个 word，跳过后续处理
+                if english_matches and ENGLISH_TOKEN_PATTERN.fullmatch(word):
                     continue
-                keywords.append(expanded)
-                seen.add(expanded)
+            # 中文词处理（jieba 分出的）
+            if not ENGLISH_TOKEN_PATTERN.fullmatch(word):
+                normalized = self._normalize_token(word)
+                if normalized and normalized not in self.stopwords and normalized not in seen:
+                    keywords.append(normalized)
+                    seen.add(normalized)
 
         if keywords:
             return keywords
@@ -110,10 +160,6 @@ class QueryProcessor:
                 normalized = normalized[len(prefix) :].strip()
                 break
         return normalized
-
-    @staticmethod
-    def _expand_keyword(token: str) -> list[str]:
-        return expand_cjk_query_token(token)
 
     @staticmethod
     def _normalize_query(query: str) -> str:

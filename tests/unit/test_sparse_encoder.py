@@ -56,17 +56,6 @@ def test_encode_supports_mixed_chinese_and_english_tokens() -> None:
     assert "检索" in records[0].sparse_vector
 
 
-def test_encode_expands_long_chinese_runs_for_bm25_matching() -> None:
-    encoder = SparseEncoder()
-
-    records = encoder.encode([make_chunk("作者叫什么名字")])
-
-    assert records[0].sparse_vector is not None
-    assert "作者叫什么名字" in records[0].sparse_vector
-    assert "作者" in records[0].sparse_vector
-    assert "名字" in records[0].sparse_vector
-
-
 def test_encode_requires_string_text() -> None:
     encoder = SparseEncoder()
     chunk = make_chunk("ok")

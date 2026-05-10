@@ -20,6 +20,13 @@ def _write_message(stdin: object, payload: dict[str, object]) -> None:
     stdin.flush()
 
 
+def _write_json_line(stdin: object, payload: dict[str, object]) -> None:
+    assert stdin is not None
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    stdin.write(body + b"\n")
+    stdin.flush()
+
+
 def _read_message(stdout: object) -> dict[str, object]:
     assert stdout is not None
     headers: dict[str, str] = {}
@@ -36,6 +43,14 @@ def _read_message(stdout: object) -> dict[str, object]:
     content_length = int(headers["content-length"])
     body = stdout.read(content_length)
     return json.loads(body.decode("utf-8"))
+
+
+def _read_json_line(stdout: object) -> dict[str, object]:
+    assert stdout is not None
+    line = stdout.readline()
+    if line == b"":
+        raise RuntimeError("unexpected EOF while reading JSON line response")
+    return json.loads(line.decode("utf-8"))
 
 
 def test_server_handles_initialize_over_stdio_without_polluting_stdout() -> None:
@@ -128,6 +143,47 @@ def test_start_mcp_server_script_handles_initialize_from_any_cwd(tmp_path: Path)
     assert "handled initialize request" in stderr_text
 
 
+def test_server_accepts_json_line_initialize_for_manual_stdio_checks() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    process = subprocess.Popen(
+        ["uv", "run", "python", "-m", "mcp_server.server"],
+        cwd=repo_root,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        _write_json_line(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "pytest", "version": "1.0.0"},
+                },
+            },
+        )
+
+        response = _read_json_line(process.stdout)
+
+        process.stdin.close()
+        exit_code = process.wait(timeout=10)
+        stderr_text = process.stderr.read().decode("utf-8")
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+    assert exit_code == 0
+    assert response["jsonrpc"] == "2.0"
+    assert response["id"] == 1
+    assert response["result"]["serverInfo"]["name"] == "modular-rag-mcp"
+    assert "handled initialize request" in stderr_text
+
+
 def test_server_returns_method_not_found_for_unknown_request() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     process = subprocess.Popen(
@@ -163,7 +219,7 @@ def test_server_returns_method_not_found_for_unknown_request() -> None:
 def test_query_knowledge_hub_tool_returns_markdown_and_structured_citations() -> None:
     def fake_executor(query: str, top_k: int, collection: str | None) -> list[RetrievalResult]:
         assert query == "azure config"
-        assert top_k == 2
+        assert top_k == 3
         assert collection == "manuals"
         return [
             RetrievalResult(
@@ -197,6 +253,9 @@ def test_query_knowledge_hub_tool_returns_markdown_and_structured_citations() ->
     assert "[1]" in result["content"][0]["text"]
     assert result["structuredContent"]["citations"][0]["source"] == "docs/azure.pdf"
     assert result["structuredContent"]["citations"][0]["page"] == 4
+    assert result["structuredContent"]["citations"][0]["score"] == 54.6
+    assert result["structuredContent"]["results"][0]["text"] == "Azure OpenAI can be configured with endpoint and api key."
+    assert result["structuredContent"]["results"][0]["source"] == "docs/azure.pdf"
 
 
 def test_query_knowledge_hub_tool_returns_friendly_empty_state() -> None:

@@ -28,6 +28,7 @@ class McpServer:
         self.stdout = stdout or sys.stdout.buffer
         self.stderr = stderr or sys.stderr.buffer
         self.logger = get_logger(__name__)
+        self._output_mode = "framed"
         self.protocol_handler = protocol_handler or ProtocolHandler(
             tools=[
                 build_query_knowledge_hub_tool(),
@@ -72,12 +73,16 @@ class McpServer:
             stripped = line.decode("utf-8").strip()
             if not stripped:
                 break
+            if not headers and stripped.startswith("{"):
+                self._output_mode = "jsonl"
+                return self._decode_message(stripped.encode("utf-8"))
 
             key, separator, value = stripped.partition(":")
             if not separator:
                 raise ValueError(f"invalid header line: {stripped}")
             headers[key.strip().lower()] = value.strip()
 
+        self._output_mode = "framed"
         content_length = int(headers.get("content-length", "0"))
         if content_length <= 0:
             raise ValueError("missing or invalid Content-Length header")
@@ -86,6 +91,10 @@ class McpServer:
         if len(payload) != content_length:
             raise ValueError("unexpected EOF while reading MCP payload")
 
+        return self._decode_message(payload)
+
+    @staticmethod
+    def _decode_message(payload: bytes) -> dict[str, Any]:
         message = json.loads(payload.decode("utf-8"))
         if not isinstance(message, dict):
             raise ValueError("MCP payload must be JSON object")
@@ -93,6 +102,11 @@ class McpServer:
 
     def _write_message(self, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        if self._output_mode == "jsonl":
+            self.stdout.write(body + b"\n")
+            self.stdout.flush()
+            return
+
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8")
         self.stdout.write(header)
         self.stdout.write(body)

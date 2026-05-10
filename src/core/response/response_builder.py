@@ -26,6 +26,7 @@ class ResponseBuilder:
                     "query": query,
                     "resultCount": 0,
                     "citations": [],
+                    "results": [],
                 },
             }
 
@@ -41,6 +42,7 @@ class ResponseBuilder:
                 "query": query,
                 "resultCount": len(retrieval_results),
                 "citations": citations,
+                "results": self._build_structured_results(retrieval_results, citations),
             },
         }
 
@@ -52,9 +54,11 @@ class ResponseBuilder:
     ) -> str:
         lines = [f"以下是与“{query}”相关的检索结果：", ""]
         for citation, result in zip(citations, retrieval_results, strict=False):
-            lines.append(f"{citation['index']}. {self._summarize(result.text)} [{citation['index']}]")
+            lines.append(f"### 结果 {citation['index']} [{citation['index']}] · score={citation['score']}")
+            lines.append(result.text.strip() or "<empty>")
+            lines.append("")
 
-        lines.extend(["", "参考来源："])
+        lines.append("参考来源：")
         for citation in citations:
             page = citation.get("page")
             page_text = f", page {page}" if page is not None else ""
@@ -62,8 +66,28 @@ class ResponseBuilder:
         return "\n".join(lines)
 
     @staticmethod
-    def _summarize(text: str, limit: int = 160) -> str:
-        normalized = " ".join(text.split())
-        if len(normalized) <= limit:
-            return normalized
-        return normalized[: max(limit - 3, 1)].rstrip() + "..."
+    def _build_structured_results(
+        retrieval_results: list[RetrievalResult],
+        citations: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        results: list[dict[str, object]] = []
+        for citation, result in zip(citations, retrieval_results, strict=False):
+            results.append(
+                {
+                    "index": citation["index"],
+                    "chunk_id": result.chunk_id,
+                    "score": citation["score"],
+                    "source": citation["source"],
+                    "page": citation.get("page"),
+                    "text": result.text,
+                    "metadata": ResponseBuilder._compact_metadata(result.metadata),
+                }
+            )
+        return results
+
+    @staticmethod
+    def _compact_metadata(metadata: dict[str, object]) -> dict[str, object]:
+        compact = dict(metadata)
+        compact.pop("images", None)
+        compact.pop("image_captions", None)
+        return compact

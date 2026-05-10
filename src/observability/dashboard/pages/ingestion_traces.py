@@ -66,7 +66,7 @@ def render(trace_service: TraceService | None = None) -> None:
             }
             for item in traces
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 

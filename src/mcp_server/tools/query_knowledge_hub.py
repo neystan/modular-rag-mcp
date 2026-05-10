@@ -5,9 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from core.query_engine.hybrid_search import HybridSearch
 from core.response.multimodal_assembler import MultimodalAssembler
-from core.query_engine.reranker import Reranker
 from core.response.response_builder import ResponseBuilder
 from core.settings import Settings, load_settings
 from core.types import RetrievalResult
@@ -43,7 +41,7 @@ def build_query_knowledge_hub_tool(
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "用户查询"},
-                "top_k": {"type": "integer", "minimum": 1, "description": "返回结果数量"},
+                "top_k": {"type": "integer", "minimum": 1, "description": "兼容字段；MCP 服务端实际使用配置 retrieval.top_k"},
                 "collection": {"type": "string", "description": "可选 collection 过滤"},
             },
             "required": ["query"],
@@ -67,10 +65,10 @@ def query_knowledge_hub(
     normalized_query = _normalize_query(query)
     normalized_collection = _normalize_collection(collection)
     settings = load_settings(settings_path)
-    normalized_top_k = _resolve_top_k(top_k, settings)
+    normalized_top_k = _resolve_top_k(settings)
     active_builder = response_builder or ResponseBuilder()
     active_assembler = multimodal_assembler or MultimodalAssembler()
-    active_executor = executor or _build_default_executor(settings)
+    active_executor = executor or _build_default_executor(settings_path)
 
     retrieval_results = active_executor(normalized_query, normalized_top_k, normalized_collection)
     payload = active_builder.build(retrieval_results, normalized_query)
@@ -80,14 +78,17 @@ def query_knowledge_hub(
     return payload
 
 
-def _build_default_executor(settings: Settings) -> ToolExecutor:
-    hybrid_search = HybridSearch(settings)
-    reranker = Reranker(settings)
-
+def _build_default_executor(settings_path: str | Path) -> ToolExecutor:
     def execute(query: str, top_k: int, collection: str | None) -> list[RetrievalResult]:
-        filters = {"collection": collection} if collection else None
-        results = hybrid_search.search(query, top_k=top_k, filters=filters)
-        return reranker.rerank(query, results, top_k=top_k)
+        from core.query_service import run_query
+
+        execution = run_query(
+            query,
+            top_k=top_k,
+            collection=collection,
+            settings_path=settings_path,
+        )
+        return execution.final_results
 
     return execute
 
@@ -104,9 +105,7 @@ def _normalize_top_k(top_k: Any) -> int:
     return top_k
 
 
-def _resolve_top_k(top_k: Any, settings: Settings) -> int:
-    if top_k is not None:
-        return _normalize_top_k(top_k)
+def _resolve_top_k(settings: Settings) -> int:
     return _normalize_top_k(settings.retrieval.get("top_k"))
 
 

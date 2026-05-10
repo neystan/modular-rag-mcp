@@ -9,6 +9,7 @@ import pytest
 from core.settings import Settings
 from libs.reranker.base_reranker import BaseReranker, NoneReranker, RerankCandidate
 from libs.reranker.reranker_factory import RerankerFactory, RerankerFactoryError
+from libs.reranker.qwen_reranker import QwenReranker
 
 
 class ReverseReranker(BaseReranker):
@@ -109,3 +110,11 @@ def test_missing_provider_reports_config_path() -> None:
 def test_register_provider_requires_basereranker_subclass() -> None:
     with pytest.raises(RerankerFactoryError, match="必须继承 BaseReranker"):
         RerankerFactory.register_provider("bad", NotReranker)  # type: ignore[arg-type]
+
+
+def test_factory_creates_qwen_reranker() -> None:
+    reranker = RerankerFactory.create(
+        make_settings(provider="qwen")
+    )
+
+    assert isinstance(reranker, QwenReranker)

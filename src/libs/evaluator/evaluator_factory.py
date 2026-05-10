@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 from core.settings import Settings
 from libs.evaluator.base_evaluator import BaseEvaluator
 from libs.evaluator.custom_evaluator import CustomEvaluator
+from libs.evaluator.ragas_evaluator import RagasEvaluator
 
 
 class EvaluatorFactoryError(ValueError):
@@ -19,7 +20,10 @@ EvaluatorType = TypeVar("EvaluatorType", bound=BaseEvaluator)
 class EvaluatorFactory:
     """按配置创建 Evaluator Provider。"""
 
-    _providers: dict[str, type[BaseEvaluator]] = {"custom": CustomEvaluator}
+    _providers: dict[str, type[BaseEvaluator]] = {
+        "custom": CustomEvaluator,
+        "ragas": RagasEvaluator,
+    }
 
     @classmethod
     def register_provider(cls, name: str, provider_cls: type[EvaluatorType]) -> None:
@@ -55,7 +59,10 @@ class EvaluatorFactory:
     def clear_providers(cls) -> None:
         """重置 Provider 注册表，保留 custom 默认实现。"""
 
-        cls._providers = {"custom": CustomEvaluator}
+        cls._providers = {
+            "custom": CustomEvaluator,
+            "ragas": RagasEvaluator,
+        }
 
     @staticmethod
     def _extract_evaluation_config(settings: Settings | dict[str, Any]) -> dict[str, Any]:

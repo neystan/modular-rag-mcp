@@ -61,7 +61,7 @@ def render(data_service: DataService | None = None) -> None:
         }
         for item in documents
     ]
-    st.dataframe(table_rows, use_container_width=True, hide_index=True)
+    st.dataframe(table_rows, width="stretch", hide_index=True)
 
     st.subheader("文档详情")
     summary_cols = st.columns(4)
@@ -88,7 +88,7 @@ def render(data_service: DataService | None = None) -> None:
         for index, image in enumerate(detail.images):
             with image_cols[index % 2]:
                 st.caption(f"{image['image_id']} · page {image.get('page_num')}")
-                st.image(str(image["file_path"]), use_container_width=True)
+                st.image(str(image["file_path"]), width="stretch")
 
 
 def _format_document_label(source_path: str, documents: list[Any]) -> str:

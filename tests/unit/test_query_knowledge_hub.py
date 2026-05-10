@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from core.types import RetrievalResult
@@ -48,3 +49,88 @@ def test_query_knowledge_hub_uses_configured_top_k_when_argument_is_omitted(tmp_
 
     assert calls == [{"query": "retrieval strategy", "top_k": 2, "collection": None}]
     assert "未找到与“retrieval strategy”相关的文档" in payload["content"][0]["text"]
+
+
+def test_query_knowledge_hub_ignores_client_top_k_and_uses_configured_value(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text(VALID_CONFIG, encoding="utf-8")
+
+    calls: list[dict[str, object]] = []
+
+    def fake_executor(query: str, top_k: int, collection: str | None) -> list[RetrievalResult]:
+        calls.append({"query": query, "top_k": top_k, "collection": collection})
+        return []
+
+    query_knowledge_hub(
+        "retrieval strategy",
+        top_k=9,
+        executor=fake_executor,
+        settings_path=config_path,
+    )
+
+    assert calls == [{"query": "retrieval strategy", "top_k": 2, "collection": None}]
+
+
+@dataclass
+class _FakeExecution:
+    final_results: list[RetrievalResult]
+
+
+def test_default_executor_reuses_run_query(monkeypatch: object, tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text(VALID_CONFIG, encoding="utf-8")
+
+    calls: list[dict[str, object]] = []
+
+    def fake_run_query(
+        query: str,
+        *,
+        top_k: int | None = None,
+        collection: str | None = None,
+        verbose: bool = False,
+        no_rerank: bool = False,
+        settings_path: str | Path = "config/settings.yaml",
+        settings: object | None = None,
+        components: object | None = None,
+    ) -> _FakeExecution:
+        calls.append(
+            {
+                "query": query,
+                "top_k": top_k,
+                "collection": collection,
+                "verbose": verbose,
+                "no_rerank": no_rerank,
+                "settings_path": str(settings_path),
+            }
+        )
+        return _FakeExecution(
+            final_results=[
+                RetrievalResult(
+                    chunk_id="chunk-a",
+                    score=0.8,
+                    text="full chunk text",
+                    metadata={"source_path": "docs/chunk-a.pdf"},
+                )
+            ]
+        )
+
+    monkeypatch.setattr("core.query_service.run_query", fake_run_query)
+
+    payload = query_knowledge_hub(
+        "what is rag",
+        top_k=3,
+        collection="manuals",
+        settings_path=config_path,
+    )
+
+    assert calls == [
+        {
+            "query": "what is rag",
+            "top_k": 2,
+            "collection": "manuals",
+            "verbose": False,
+            "no_rerank": False,
+            "settings_path": str(config_path),
+        }
+    ]
+    assert "full chunk text" in payload["content"][0]["text"]

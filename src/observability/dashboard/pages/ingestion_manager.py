@@ -146,7 +146,7 @@ def render(
         custom_collection = upload_cols[1].text_input("目标集合名称", value=default_collection)
         uploaded_file = st.file_uploader("选择 PDF 文件", type=["pdf"])
         force = st.checkbox("强制重建（忽略去重）", value=False)
-        submitted = st.form_submit_button("开始摄取", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("开始摄取", type="primary", width="stretch")
 
     if submitted:
         target_collection = custom_collection if selected_option == "使用默认集合" else selected_option
@@ -176,7 +176,7 @@ def render(
         row_cols[1].caption(item.collection)
         row_cols[2].caption(f"chunks: {item.chunk_count}")
         row_cols[3].caption(f"images: {item.image_count}")
-        if row_cols[4].button("删除", key=f"delete-{item.collection}-{item.file_hash}", use_container_width=True):
+        if row_cols[4].button("删除", key=f"delete-{item.collection}-{item.file_hash}", width="stretch"):
             _delete_document(service, item.source_path, item.collection)
             return
 

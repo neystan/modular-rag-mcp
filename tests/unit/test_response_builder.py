@@ -24,10 +24,15 @@ def test_response_builder_builds_markdown_and_citations() -> None:
     payload = builder.build([make_result("chunk-a", page=3), make_result("chunk-b")], "azure")
 
     assert payload["content"][0]["type"] == "text"
-    assert "[1]" in payload["content"][0]["text"]
+    assert "### 结果 1 [1] · score=52.8" in payload["content"][0]["text"]
+    assert "content for chunk-a" in payload["content"][0]["text"]
     assert "docs/chunk-a.pdf, page 3" in payload["content"][0]["text"]
     assert payload["structuredContent"]["resultCount"] == 2
     assert payload["structuredContent"]["citations"][0]["chunk_id"] == "chunk-a"
+    assert payload["structuredContent"]["citations"][0]["score"] == 52.8
+    assert payload["structuredContent"]["results"][0]["chunk_id"] == "chunk-a"
+    assert payload["structuredContent"]["results"][0]["text"] == "content for chunk-a"
+    assert payload["structuredContent"]["results"][0]["score"] == 52.8
 
 
 def test_response_builder_returns_friendly_message_for_empty_results() -> None:
@@ -37,3 +42,4 @@ def test_response_builder_returns_friendly_message_for_empty_results() -> None:
 
     assert "未找到与“missing”相关的文档" in payload["content"][0]["text"]
     assert payload["structuredContent"]["citations"] == []
+    assert payload["structuredContent"]["results"] == []

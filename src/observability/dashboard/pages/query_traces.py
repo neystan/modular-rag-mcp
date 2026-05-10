@@ -67,7 +67,7 @@ def render(trace_service: TraceService | None = None) -> None:
             }
             for item in traces
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -86,14 +86,14 @@ def render(trace_service: TraceService | None = None) -> None:
     st.subheader("Dense vs Sparse 对比")
     compare_cols = st.columns(2)
     compare_cols[0].markdown("**Dense Results**")
-    compare_cols[0].dataframe(_rank_rows(detail.dense_ids), use_container_width=True, hide_index=True)
+    compare_cols[0].dataframe(_rank_rows(detail.dense_ids), width="stretch", hide_index=True)
     compare_cols[1].markdown("**Sparse Results**")
-    compare_cols[1].dataframe(_rank_rows(detail.sparse_ids), use_container_width=True, hide_index=True)
+    compare_cols[1].dataframe(_rank_rows(detail.sparse_ids), width="stretch", hide_index=True)
 
     st.subheader("Rerank 变化")
     before_ids = detail.rerank_input_ids or detail.fusion_ids
     after_ids = detail.rerank_result_ids or detail.final_ids
-    st.dataframe(_rerank_rows(before_ids, after_ids), use_container_width=True, hide_index=True)
+    st.dataframe(_rerank_rows(before_ids, after_ids), width="stretch", hide_index=True)
     if detail.rerank_enabled:
         st.caption(f"rerank_applied={detail.rerank_applied}")
     else:

@@ -173,14 +173,17 @@ class IngestionPipeline:
                 },
             )
             self._emit_progress(on_progress, "embed", 4, total_stages)
-            self._run_stage(
-                "bm25.build",
-                lambda: self.bm25_indexer.build(batch_result.sparse_records, rebuild=False),
-                trace_context,
-            )
             vector_records = self._run_stage(
                 "vector.upsert",
                 lambda: self.vector_upserter.upsert(batch_result.dense_records, trace=trace_context),
+                trace_context,
+            )
+            bm25_records = self._merge_sparse_vectors(
+                vector_records, batch_result.sparse_records
+            )
+            self._run_stage(
+                "bm25.build",
+                lambda: self.bm25_indexer.build(bm25_records, rebuild=False),
                 trace_context,
             )
             self._record_pipeline_stage(
@@ -323,6 +326,27 @@ class IngestionPipeline:
             if isinstance(provider, str) and provider.strip():
                 return provider.strip()
         return self.vector_upserter.__class__.__name__.lower()
+
+    @staticmethod
+    def _merge_sparse_vectors(
+        vector_records: list[ChunkRecord],
+        sparse_records: list[ChunkRecord],
+    ) -> list[ChunkRecord]:
+        """将 vector_upsert 后的新 ID 与 sparse_records 的 sparse_vector 合并，供 BM25 构建。"""
+        # dense_records 和 sparse_records 来自同一批 chunks，顺序一致，按索引对齐
+        merged: list[ChunkRecord] = []
+        for index, vr in enumerate(vector_records):
+            sr = sparse_records[index] if index < len(sparse_records) else None
+            merged.append(
+                ChunkRecord(
+                    id=vr.id,
+                    text=vr.text,
+                    metadata=copy.deepcopy(vr.metadata),
+                    dense_vector=vr.dense_vector,
+                    sparse_vector=copy.deepcopy(sr.sparse_vector) if sr and sr.sparse_vector else None,
+                )
+            )
+        return merged
 
     @staticmethod
     def _record_pipeline_stage(
