@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Callable
-
 import streamlit as st
 
 from observability.dashboard.pages.data_browser import render as render_data_browser
 from observability.dashboard.pages.ingestion_manager import render as render_ingestion_manager
 from observability.dashboard.pages.ingestion_traces import render as render_ingestion_traces
+from observability.dashboard.pages.evaluation_panel import render as render_evaluation_panel
 from observability.dashboard.pages.overview import render as render_overview
 from observability.dashboard.pages.query_traces import render as render_query_traces
 
@@ -51,7 +50,7 @@ def main() -> None:
             ],
             "评估": [
                 st.Page(
-                    _placeholder_page("评估面板", "H4 将在这里接入评估任务运行与指标展示。"),
+                    render_evaluation_panel,
                     title="评估面板",
                     url_path="evaluation-panel",
                     icon=":material/analytics:",
@@ -60,14 +59,6 @@ def main() -> None:
         }
     )
     navigation.run()
-
-
-def _placeholder_page(title: str, description: str) -> Callable[[], None]:
-    def render() -> None:
-        st.title(title)
-        st.info(description)
-
-    return render
 
 
 if __name__ == "__main__":

@@ -2049,7 +2049,7 @@ dashboard:
 | H1 | RagasEvaluator 实现 | [x] | 2026-05-10 | RagasEvaluator + ragas provider 注册 + mock runner 单元测试 |
 | H2 | CompositeEvaluator 实现 | [x] | 2026-05-10 | CompositeEvaluator + evaluation.backends 配置组合 + 7 个单元测试 |
 | H3 | EvalRunner + Golden Test Set | [x] | 2026-05-10 | EvalRunner + golden_test_set.json + scripts/evaluate.py + 3 个单元测试 |
-| H4 | 评估面板页面 | [ ] | | |
+| H4 | 评估面板页面 | [x] | 2026-05-10 | Dashboard 评估页 + golden set 预览 + 运行评估 + 历史对比 + 3 个单元测试 |
 | H5 | Recall 回归测试（E2E） | [ ] | | |
 
 #### 阶段 I：端到端验收与文档收口
@@ -2075,9 +2075,9 @@ dashboard:
 | 阶段 E | 6 | 6 | 100% |
 | 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 6 | 6 | 100% |
-| 阶段 H | 5 | 3 | 60% |
+| 阶段 H | 5 | 4 | 80% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **69** | **62** | **90%** |
+| **总计** | **69** | **63** | **91%** |
 
 ---
 
