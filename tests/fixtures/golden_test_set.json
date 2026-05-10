@@ -1,7 +1,7 @@
 {
   "test_cases": [
     {
-      "query": "如何配置 Azure OpenAI？",
+      "query": "不转到大模型不改名是谁？",
       "expected_chunk_ids": ["chunk_azure_config_001"],
       "expected_sources": ["azure_openai_config.pdf"]
     },

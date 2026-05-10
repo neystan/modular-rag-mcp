@@ -25,7 +25,7 @@ class RagasEvaluator(BaseEvaluator):
         trace: Any | None = None,
     ) -> dict[str, float]:
         normalized_query = self._normalize_query(query)
-        contexts = self._resolve_contexts(retrieved_ids)
+        contexts = self._resolve_contexts(retrieved_ids, trace)
         answer = self._resolve_answer(trace)
         ground_truth = self._resolve_ground_truth(golden_ids)
 
@@ -86,8 +86,16 @@ class RagasEvaluator(BaseEvaluator):
             raise RagasEvaluatorError("ragas evaluator input error: query is required")
         return query.strip()
 
-    def _resolve_contexts(self, retrieved_ids: list[str]) -> list[str]:
+    def _resolve_contexts(self, retrieved_ids: list[str], trace: Any | None) -> list[str]:
         configured = self.config.get("contexts")
+        if configured is None:
+            configured = self.config.get("context_texts")
+        if isinstance(trace, dict):
+            trace_contexts = trace.get("contexts") or trace.get("context_texts")
+            if isinstance(trace_contexts, list):
+                normalized = [str(item).strip() for item in trace_contexts if str(item).strip()]
+                if normalized:
+                    return normalized
         contexts = configured if isinstance(configured, list) else retrieved_ids
         if not isinstance(contexts, list) or not contexts:
             raise RagasEvaluatorError("ragas evaluator input error: contexts are required")

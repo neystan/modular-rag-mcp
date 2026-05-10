@@ -10,6 +10,7 @@ from pathlib import Path
 from core.query_engine.hybrid_search import HybridSearch
 from core.settings import load_settings
 from libs.evaluator.evaluator_factory import EvaluatorFactory
+from libs.llm.llm_factory import LLMFactory
 from observability.evaluation.eval_runner import EvalRunner, EvalRunnerError
 
 
@@ -53,6 +54,7 @@ def run_evaluation(
         settings=settings,
         hybrid_search=HybridSearch(settings),
         evaluator=EvaluatorFactory.create(settings),
+        llm=LLMFactory.create(settings),
     )
     return runner.run(test_set_path)
 

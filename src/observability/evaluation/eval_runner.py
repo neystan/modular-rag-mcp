@@ -11,6 +11,7 @@ from core.query_engine.hybrid_search import HybridSearch
 from core.settings import Settings
 from core.types import RetrievalResult
 from libs.evaluator.base_evaluator import BaseEvaluator
+from libs.llm.base_llm import BaseLLM
 
 
 class EvalRunnerError(RuntimeError):
@@ -35,6 +36,7 @@ class EvalCaseResult:
     expected_chunk_ids: list[str]
     expected_sources: list[str]
     metrics: dict[str, float]
+    generated_answer: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,10 +61,12 @@ class EvalRunner:
         settings: Settings,
         hybrid_search: HybridSearch,
         evaluator: BaseEvaluator,
+        llm: BaseLLM | None = None,
     ) -> None:
         self.settings = settings
         self.hybrid_search = hybrid_search
         self.evaluator = evaluator
+        self.llm = llm
 
     def run(self, test_set_path: str | Path) -> EvalReport:
         cases = self._load_test_cases(test_set_path)
@@ -74,7 +78,10 @@ class EvalRunner:
             retrieval_results = self.hybrid_search.search(case.query, top_k=top_k)
             retrieved_ids = [item.chunk_id for item in retrieval_results]
             golden_ids = case.expected_chunk_ids or self._matched_source_ids(retrieval_results, case.expected_sources)
-            metrics = self.evaluator.evaluate(case.query, retrieved_ids, golden_ids)
+            contexts = [item.text for item in retrieval_results if str(item.text).strip()]
+            generated_answer = self._build_answer(case.query, contexts)
+            trace = {"generated_answer": generated_answer, "contexts": contexts}
+            metrics = self.evaluator.evaluate(case.query, retrieved_ids, golden_ids, trace=trace)
             normalized_metrics = self._normalize_metrics(metrics)
             results.append(
                 EvalCaseResult(
@@ -83,6 +90,7 @@ class EvalRunner:
                     expected_chunk_ids=list(case.expected_chunk_ids),
                     expected_sources=list(case.expected_sources),
                     metrics=normalized_metrics,
+                    generated_answer=generated_answer,
                 )
             )
             for key, value in normalized_metrics.items():
@@ -145,6 +153,26 @@ class EvalRunner:
         if not isinstance(top_k, int) or top_k <= 0:
             raise EvalRunnerError("eval runner config error: retrieval.top_k must be positive int")
         return top_k
+
+    def _build_answer(self, query: str, contexts: list[str]) -> str:
+        if not contexts:
+            return ""
+        if self.llm is None:
+            return "\n\n".join(contexts)
+
+        context_text = "\n\n".join(f"[{index}] {text}" for index, text in enumerate(contexts, start=1))
+        return self.llm.chat(
+            [
+                {
+                    "role": "system",
+                    "content": "你是 RAG 评估生成器。只能基于给定上下文回答，避免编造。",
+                },
+                {
+                    "role": "user",
+                    "content": f"问题：{query}\n\n上下文：\n{context_text}\n\n请给出简洁答案。",
+                },
+            ]
+        )
 
     @staticmethod
     def _matched_source_ids(results: list[RetrievalResult], expected_sources: list[str]) -> list[str]:

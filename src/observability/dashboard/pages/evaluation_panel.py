@@ -12,6 +12,7 @@ import streamlit as st
 from core.query_engine.hybrid_search import HybridSearch
 from core.settings import Settings, load_settings
 from libs.evaluator.evaluator_factory import EvaluatorFactory
+from libs.llm.llm_factory import LLMFactory
 from observability.evaluation.eval_runner import EvalReport, EvalRunner
 
 
@@ -128,6 +129,7 @@ def _build_default_runner(settings: Settings) -> EvalRunner:
         settings=settings,
         hybrid_search=HybridSearch(settings),
         evaluator=EvaluatorFactory.create(settings),
+        llm=LLMFactory.create(settings),
     )
 
 

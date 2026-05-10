@@ -80,12 +80,16 @@ def test_ragas_evaluator_returns_metrics_from_injected_runner() -> None:
 
 
 def test_ragas_evaluator_can_read_answer_from_trace() -> None:
+    captured: dict[str, Any] = {}
+
+    def runner(query: str, answer: str, contexts: list[str], ground_truth: str, metrics: list[str]) -> dict[str, float]:
+        captured["answer"] = answer
+        captured["contexts"] = contexts
+        return {"faithfulness": 1, "answer_relevancy": 0.9}
+
     evaluator = RagasEvaluator(
         {
-            "runner": lambda query, answer, contexts, ground_truth, metrics: {
-                "faithfulness": 1,
-                "answer_relevancy": 0.9,
-            }
+            "runner": runner
         }
     )
 
@@ -93,10 +97,11 @@ def test_ragas_evaluator_can_read_answer_from_trace() -> None:
         "query",
         ["context"],
         ["ground truth"],
-        trace={"generated_answer": "answer from trace"},
+        trace={"generated_answer": "answer from trace", "contexts": ["context from trace"]},
     )
 
     assert metrics == {"faithfulness": 1.0, "answer_relevancy": 0.9}
+    assert captured == {"answer": "answer from trace", "contexts": ["context from trace"]}
 
 
 def test_ragas_evaluator_reports_missing_optional_dependency(monkeypatch: pytest.MonkeyPatch) -> None:

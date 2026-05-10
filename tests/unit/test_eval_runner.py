@@ -11,6 +11,7 @@ import pytest
 from core.settings import Settings
 from core.types import RetrievalResult
 from libs.evaluator.base_evaluator import BaseEvaluator
+from libs.llm.base_llm import BaseLLM
 from observability.evaluation.eval_runner import EvalReport, EvalRunner, EvalRunnerError
 
 
@@ -36,7 +37,7 @@ class RecordingEvaluator(BaseEvaluator):
         golden_ids: list[str],
         trace: Any | None = None,
     ) -> dict[str, float]:
-        self.calls.append({"query": query, "retrieved_ids": retrieved_ids, "golden_ids": golden_ids})
+        self.calls.append({"query": query, "retrieved_ids": retrieved_ids, "golden_ids": golden_ids, "trace": trace})
         first_hit_rank = next(
             (index for index, chunk_id in enumerate(retrieved_ids, start=1) if chunk_id in set(golden_ids)),
             None,
@@ -44,6 +45,16 @@ class RecordingEvaluator(BaseEvaluator):
         if first_hit_rank is None:
             return {"hit_rate": 0.0, "mrr": 0.0}
         return {"hit_rate": 1.0, "mrr": 1.0 / float(first_hit_rank)}
+
+
+class FakeLLM(BaseLLM):
+    def __init__(self) -> None:
+        super().__init__({})
+        self.messages: list[list[dict[str, Any]]] = []
+
+    def chat(self, messages: list[Any]) -> str:
+        self.messages.append(messages)
+        return "generated answer"
 
 
 def make_settings() -> Settings:
@@ -117,6 +128,7 @@ def test_eval_runner_runs_test_set_and_averages_metrics(tmp_path: Path) -> None:
         "query": "q1",
         "retrieved_ids": ["chunk-a", "chunk-b"],
         "golden_ids": ["chunk-b"],
+        "trace": {"generated_answer": "text for chunk-a\n\ntext for chunk-b", "contexts": ["text for chunk-a", "text for chunk-b"]},
     }
 
 
@@ -134,6 +146,24 @@ def test_eval_runner_can_use_expected_sources_when_chunk_ids_are_absent(tmp_path
 
     assert report.hit_rate == 1.0
     assert evaluator.calls[0]["golden_ids"] == ["chunk-a"]
+
+
+def test_eval_runner_uses_llm_to_generate_answer_for_evaluators(tmp_path: Path) -> None:
+    test_set_path = tmp_path / "golden.json"
+    test_set_path.write_text(
+        json.dumps({"test_cases": [{"query": "q", "expected_chunk_ids": ["chunk-a"]}]}),
+        encoding="utf-8",
+    )
+    search = FakeHybridSearch({"q": [make_result("chunk-a", "docs/manual.pdf")]})
+    evaluator = RecordingEvaluator()
+    llm = FakeLLM()
+    runner = EvalRunner(make_settings(), search, evaluator, llm=llm)  # type: ignore[arg-type]
+
+    report = runner.run(test_set_path)
+
+    assert report.results[0].generated_answer == "generated answer"
+    assert evaluator.calls[0]["trace"] == {"generated_answer": "generated answer", "contexts": ["text for chunk-a"]}
+    assert llm.messages[0][1]["content"].startswith("问题：q")
 
 
 def test_eval_runner_rejects_invalid_test_set(tmp_path: Path) -> None:
