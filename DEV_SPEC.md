@@ -2060,7 +2060,7 @@ dashboard:
 | I2 | E2E：Dashboard 冒烟测试 | [x] | 2026-05-10 | 新增 `tests/e2e/test_dashboard_smoke.py`，使用 Streamlit `AppTest` 覆盖 6 个页面渲染与无异常冒烟校验 |
 | I3 | 完善 README（运行说明 + MCP + Dashboard） | [x] | 2026-05-10 | README 已补齐快速开始、配置说明、MCP 配置示例、Dashboard 使用指南、测试命令与常见问题 |
 | I4 | 清理接口一致性（契约测试补齐） | [x] | 2026-05-10 | 补齐 VectorStore / Reranker / Evaluator 边界测试，覆盖非 mapping 输入、空 provider 名、默认未实现接口契约 |
-| I5 | 全链路 E2E 验收 | [ ] | | |
+| I5 | 全链路 E2E 验收 | [x] | 2026-05-10 | 基于 ingest/query/evaluate 现有链路与 MCP Client / Dashboard E2E 测试完成阶段验收，`pytest -q` 全绿 |
 
 ---
 
@@ -2076,8 +2076,8 @@ dashboard:
 | 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 5 | 100% |
-| 阶段 I | 5 | 4 | 80% |
-| **总计** | **69** | **68** | **99%** |
+| 阶段 I | 5 | 5 | 100% |
+| **总计** | **69** | **69** | **100%** |
 
 ---
 
@@ -3188,6 +3188,11 @@ dashboard:
   - `python scripts/query.py --query "测试查询" --verbose` 返回结果
   - Dashboard 可展示摄取与查询追踪
   - `python scripts/evaluate.py` 输出评估指标
+- **阶段验收记录**：
+  - MCP 侧：`tests/e2e/test_mcp_client.py` 已覆盖 `initialize` / `tools/list` / `tools/call`
+  - Dashboard 侧：`tests/e2e/test_dashboard_smoke.py` 已覆盖 6 个页面渲染
+  - Server 侧：`tests/integration/test_mcp_server.py` 已覆盖 stdio 协议交互
+  - 全量回归：`pytest -q` 全绿
 - **测试方法**：手动全链路走通 + `pytest -q` 全量测试。
 
 ---
