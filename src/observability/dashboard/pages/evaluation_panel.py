@@ -57,9 +57,9 @@ def load_test_set_summary(test_set_path: str | Path) -> dict[str, Any]:
             summary["error"] = "test_cases 必须是 list"
             return summary
         queries = [
-            str(item.get("query", "")).strip()
+            str(item.get("question") or item.get("query") or "").strip()
             for item in raw_cases
-            if isinstance(item, dict) and str(item.get("query", "")).strip()
+            if isinstance(item, dict) and str(item.get("question") or item.get("query") or "").strip()
         ]
         summary["case_count"] = len(raw_cases)
         summary["queries"] = queries
@@ -179,10 +179,16 @@ def _render_test_set_preview(summary: dict[str, Any]) -> None:
 
 def _render_report(report: EvalReport) -> None:
     st.subheader("评估结果")
-    metric_cols = st.columns(3)
-    metric_cols[0].metric("测试用例", report.total_cases)
-    metric_cols[1].metric("Hit Rate", f"{report.hit_rate:.3f}")
-    metric_cols[2].metric("MRR", f"{report.mrr:.3f}")
+    primary_metrics = [
+        ("测试用例", float(report.total_cases)),
+        ("context_precision", report.metrics.get("context_precision", report.hit_rate)),
+        ("context_recall", report.metrics.get("context_recall", 0.0)),
+        ("faithfulness", report.metrics.get("faithfulness", report.mrr)),
+        ("answer_relevancy", report.metrics.get("answer_relevancy", 0.0)),
+    ]
+    metric_cols = st.columns(len(primary_metrics))
+    for column, (label, value) in zip(metric_cols, primary_metrics, strict=False):
+        column.metric(label, f"{value:.3f}" if label != "测试用例" else str(int(value)))
 
     st.markdown("**平均指标**")
     st.dataframe(
@@ -200,7 +206,10 @@ def _case_rows(report: EvalReport) -> list[dict[str, Any]]:
     for item in report.results:
         row = {
             "query": item.query,
+            "reference": item.reference,
+            "answer": item.answer,
             "retrieved_ids": ", ".join(item.retrieved_ids),
+            "contexts": "\n---\n".join(item.contexts),
             "expected_chunk_ids": ", ".join(item.expected_chunk_ids),
             "expected_sources": ", ".join(item.expected_sources),
         }
@@ -217,8 +226,10 @@ def _append_history(report: EvalReport, backend: str, test_set_path: str | Path)
             "backend": backend,
             "test_set": str(test_set_path),
             "total_cases": report.total_cases,
-            "hit_rate": round(report.hit_rate, 4),
-            "mrr": round(report.mrr, 4),
+            "context_precision": round(report.metrics.get("context_precision", report.hit_rate), 4),
+            "context_recall": round(report.metrics.get("context_recall", 0.0), 4),
+            "faithfulness": round(report.metrics.get("faithfulness", report.mrr), 4),
+            "answer_relevancy": round(report.metrics.get("answer_relevancy", 0.0), 4),
         }
     )
     st.session_state[HISTORY_KEY] = history[-20:]

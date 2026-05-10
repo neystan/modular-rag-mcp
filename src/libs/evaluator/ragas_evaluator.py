@@ -15,7 +15,7 @@ class RagasEvaluatorError(RuntimeError):
 class RagasEvaluator(BaseEvaluator):
     """封装 Ragas 的生成质量评估器。"""
 
-    default_metrics = ("faithfulness", "answer_relevancy", "context_precision")
+    default_metrics = ("context_precision", "context_recall", "faithfulness", "answer_relevancy")
 
     def evaluate(
         self,
@@ -27,13 +27,13 @@ class RagasEvaluator(BaseEvaluator):
         normalized_query = self._normalize_query(query)
         contexts = self._resolve_contexts(retrieved_ids, trace)
         answer = self._resolve_answer(trace)
-        ground_truth = self._resolve_ground_truth(golden_ids)
+        reference = self._resolve_reference(golden_ids, trace)
 
         runner = self.config.get("runner")
         if callable(runner):
-            result = runner(normalized_query, answer, contexts, ground_truth, self._metric_names())
+            result = runner(normalized_query, answer, contexts, reference, self._metric_names())
         else:
-            result = self._run_ragas(normalized_query, answer, contexts, ground_truth)
+            result = self._run_ragas(normalized_query, answer, contexts, reference)
 
         return self._normalize_metrics(result)
 
@@ -42,7 +42,7 @@ class RagasEvaluator(BaseEvaluator):
         query: str,
         answer: str,
         contexts: list[str],
-        ground_truth: str,
+        reference: str,
     ) -> Any:
         ragas = self._import_required("ragas")
         metrics_module = self._import_required("ragas.metrics")
@@ -55,7 +55,7 @@ class RagasEvaluator(BaseEvaluator):
                     "question": query,
                     "answer": answer,
                     "contexts": contexts,
-                    "ground_truth": ground_truth,
+                    "ground_truth": reference,
                 }
             ]
         )
@@ -68,7 +68,7 @@ class RagasEvaluator(BaseEvaluator):
         except ImportError as exc:
             raise ImportError(
                 "RagasEvaluator requires optional dependencies: install ragas and datasets to use "
-                "evaluation.provider=ragas"
+                "evaluation.provider=ragas. Install with: uv add ragas datasets"
             ) from exc
 
     def _metric_names(self) -> list[str]:
@@ -114,15 +114,21 @@ class RagasEvaluator(BaseEvaluator):
                 return answer.strip()
         raise RagasEvaluatorError("ragas evaluator input error: answer is required")
 
-    def _resolve_ground_truth(self, golden_ids: list[str]) -> str:
-        configured = self.config.get("ground_truth")
+    def _resolve_reference(self, golden_ids: list[str], trace: Any | None) -> str:
+        configured = self.config.get("reference")
+        if configured is None:
+            configured = self.config.get("ground_truth")
         if isinstance(configured, str) and configured.strip():
             return configured.strip()
+        if isinstance(trace, dict):
+            reference = trace.get("reference") or trace.get("ground_truth")
+            if isinstance(reference, str) and reference.strip():
+                return reference.strip()
         if isinstance(golden_ids, list) and golden_ids:
             joined = "\n".join(str(item).strip() for item in golden_ids if str(item).strip())
             if joined:
                 return joined
-        raise RagasEvaluatorError("ragas evaluator input error: ground_truth is required")
+        raise RagasEvaluatorError("ragas evaluator input error: reference is required")
 
     @staticmethod
     def _normalize_metrics(result: Any) -> dict[str, float]:
@@ -143,7 +149,7 @@ class RagasEvaluator(BaseEvaluator):
 
         metrics: dict[str, float] = {}
         for key, value in result.items():
-            if key in {"question", "answer", "contexts", "ground_truth"}:
+            if key in {"question", "answer", "contexts", "ground_truth", "reference"}:
                 continue
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]

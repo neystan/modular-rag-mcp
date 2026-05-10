@@ -41,7 +41,7 @@ def make_settings(provider: str = "custom") -> Settings:
 
 def write_test_set(path: Path) -> None:
     path.write_text(
-        json.dumps({"test_cases": [{"query": "q1", "expected_chunk_ids": ["chunk-a"]}]}),
+        json.dumps({"test_cases": [{"question": "q1", "reference": "reference"}]}),
         encoding="utf-8",
     )
 
@@ -85,6 +85,9 @@ def test_run_dashboard_evaluation_can_override_backend(tmp_path: Path) -> None:
         results=[
             EvalCaseResult(
                 query="q1",
+                reference="reference",
+                answer="answer",
+                contexts=["context"],
                 retrieved_ids=["chunk-a"],
                 expected_chunk_ids=["chunk-a"],
                 expected_sources=[],

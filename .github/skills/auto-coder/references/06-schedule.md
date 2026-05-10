@@ -1150,7 +1150,7 @@
   - `tests/unit/test_ragas_evaluator.py`（新增）
 - **实现类/函数**：
   - `RagasEvaluator(BaseEvaluator)`：实现 `evaluate()` 方法
-  - 支持指标：Faithfulness, Answer Relevancy, Context Precision
+  - 支持指标：Context Precision, Context Recall, Faithfulness, Answer Relevancy
   - 优雅降级：Ragas 未安装时抛出明确的 `ImportError` 提示
 - **验收标准**：mock LLM 环境下，`evaluate()` 返回包含 faithfulness/answer_relevancy 的 metrics 字典。
 - **测试方法**：`pytest -q tests/unit/test_ragas_evaluator.py`。
@@ -1168,7 +1168,7 @@
 - **测试方法**：`pytest -q tests/unit/test_composite_evaluator.py`。
 
 ### H3：EvalRunner + Golden Test Set
-- **目标**：实现 `eval_runner.py`：读取 `tests/fixtures/golden_test_set.json`，跑 retrieval 并产出 metrics。
+- **目标**：实现 `eval_runner.py`：读取 `tests/fixtures/golden_test_set.json`，按 Ragas 样本格式产出 metrics。
 - **前置依赖**：D5（HybridSearch）、H1-H2（评估器）
 - **修改文件**：
   - `src/observability/evaluation/eval_runner.py`（新增）
@@ -1177,15 +1177,16 @@
 - **实现类/函数**：
   - `EvalRunner.__init__(settings, hybrid_search, evaluator)`
   - `EvalRunner.run(test_set_path) -> EvalReport`：运行评估并返回报告
-  - `EvalReport`：包含 hit_rate, mrr, 各 query 结果详情
+  - `EvalReport`：包含 context_precision, context_recall, faithfulness, answer_relevancy 等 metrics 与各 question 结果详情
 - **golden_test_set.json 格式**：
   ```json
   {
     "test_cases": [
       {
-        "query": "如何配置 Azure OpenAI？",
-        "expected_chunk_ids": ["chunk_abc_001", "chunk_abc_002"],
-        "expected_sources": ["config_guide.pdf"]
+        "question": "如何配置 Azure OpenAI？",
+        "answer": "",
+        "contexts": [],
+        "reference": "在 settings.yaml 中配置 azure provider、deployment、endpoint、api_version 与 api_key。"
       }
     ]
   }

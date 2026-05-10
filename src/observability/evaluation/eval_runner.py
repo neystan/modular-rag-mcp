@@ -23,6 +23,9 @@ class EvalCase:
     """黄金测试集中的单条用例。"""
 
     query: str
+    reference: str
+    answer: str = ""
+    contexts: list[str] = field(default_factory=list)
     expected_chunk_ids: list[str] = field(default_factory=list)
     expected_sources: list[str] = field(default_factory=list)
 
@@ -32,11 +35,13 @@ class EvalCaseResult:
     """单条评估结果。"""
 
     query: str
+    reference: str
+    answer: str
+    contexts: list[str]
     retrieved_ids: list[str]
     expected_chunk_ids: list[str]
     expected_sources: list[str]
     metrics: dict[str, float]
-    generated_answer: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,22 +80,24 @@ class EvalRunner:
         results: list[EvalCaseResult] = []
         metric_totals: dict[str, float] = {}
         for case in cases:
-            retrieval_results = self.hybrid_search.search(case.query, top_k=top_k)
+            retrieval_results = [] if case.contexts else self.hybrid_search.search(case.query, top_k=top_k)
             retrieved_ids = [item.chunk_id for item in retrieval_results]
             golden_ids = case.expected_chunk_ids or self._matched_source_ids(retrieval_results, case.expected_sources)
-            contexts = [item.text for item in retrieval_results if str(item.text).strip()]
-            generated_answer = self._build_answer(case.query, contexts)
-            trace = {"generated_answer": generated_answer, "contexts": contexts}
+            contexts = case.contexts or [item.text for item in retrieval_results if str(item.text).strip()]
+            answer = case.answer or self._build_answer(case.query, contexts)
+            trace = {"answer": answer, "contexts": contexts, "reference": case.reference}
             metrics = self.evaluator.evaluate(case.query, retrieved_ids, golden_ids, trace=trace)
             normalized_metrics = self._normalize_metrics(metrics)
             results.append(
                 EvalCaseResult(
                     query=case.query,
+                    reference=case.reference,
+                    answer=answer,
+                    contexts=contexts,
                     retrieved_ids=retrieved_ids,
                     expected_chunk_ids=list(case.expected_chunk_ids),
                     expected_sources=list(case.expected_sources),
                     metrics=normalized_metrics,
-                    generated_answer=generated_answer,
                 )
             )
             for key, value in normalized_metrics.items():
@@ -125,8 +132,24 @@ class EvalRunner:
             if not isinstance(item, dict):
                 raise EvalRunnerError(f"golden test set error: test_cases[{index}] must be object")
             query = item.get("query")
+            if query is None:
+                query = item.get("question")
             if not isinstance(query, str) or not query.strip():
-                raise EvalRunnerError(f"golden test set error: test_cases[{index}].query is required")
+                raise EvalRunnerError(f"golden test set error: test_cases[{index}].question is required")
+            reference = item.get("reference")
+            if reference is None:
+                reference = item.get("ground_truth") or item.get("ground_truths")
+            if not isinstance(reference, str) or not reference.strip():
+                raise EvalRunnerError(f"golden test set error: test_cases[{index}].reference is required")
+            answer = item.get("answer", "")
+            if answer is None:
+                answer = ""
+            if not isinstance(answer, str):
+                raise EvalRunnerError(f"golden test set error: test_cases[{index}].answer must be string")
+            contexts = _normalize_string_list(
+                item.get("contexts", []),
+                f"test_cases[{index}].contexts",
+            )
             expected_chunk_ids = _normalize_string_list(
                 item.get("expected_chunk_ids", []),
                 f"test_cases[{index}].expected_chunk_ids",
@@ -135,13 +158,12 @@ class EvalRunner:
                 item.get("expected_sources", []),
                 f"test_cases[{index}].expected_sources",
             )
-            if not expected_chunk_ids and not expected_sources:
-                raise EvalRunnerError(
-                    f"golden test set error: test_cases[{index}] requires expected_chunk_ids or expected_sources"
-                )
             cases.append(
                 EvalCase(
                     query=query.strip(),
+                    reference=reference.strip(),
+                    answer=answer.strip(),
+                    contexts=contexts,
                     expected_chunk_ids=expected_chunk_ids,
                     expected_sources=expected_sources,
                 )

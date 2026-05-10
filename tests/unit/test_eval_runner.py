@@ -86,12 +86,14 @@ def write_test_set(path: Path) -> None:
             {
                 "test_cases": [
                     {
-                        "query": "q1",
+                        "question": "q1",
+                        "reference": "reference 1",
                         "expected_chunk_ids": ["chunk-b"],
                         "expected_sources": ["manual.pdf"],
                     },
                     {
-                        "query": "q2",
+                        "question": "q2",
+                        "reference": "reference 2",
                         "expected_chunk_ids": ["chunk-z"],
                         "expected_sources": ["missing.pdf"],
                     },
@@ -128,14 +130,18 @@ def test_eval_runner_runs_test_set_and_averages_metrics(tmp_path: Path) -> None:
         "query": "q1",
         "retrieved_ids": ["chunk-a", "chunk-b"],
         "golden_ids": ["chunk-b"],
-        "trace": {"generated_answer": "text for chunk-a\n\ntext for chunk-b", "contexts": ["text for chunk-a", "text for chunk-b"]},
+        "trace": {
+            "answer": "text for chunk-a\n\ntext for chunk-b",
+            "contexts": ["text for chunk-a", "text for chunk-b"],
+            "reference": "reference 1",
+        },
     }
 
 
 def test_eval_runner_can_use_expected_sources_when_chunk_ids_are_absent(tmp_path: Path) -> None:
     test_set_path = tmp_path / "golden.json"
     test_set_path.write_text(
-        json.dumps({"test_cases": [{"query": "q", "expected_sources": ["manual.pdf"]}]}),
+        json.dumps({"test_cases": [{"question": "q", "reference": "reference", "expected_sources": ["manual.pdf"]}]}),
         encoding="utf-8",
     )
     search = FakeHybridSearch({"q": [make_result("chunk-a", "docs/manual.pdf")]})
@@ -151,7 +157,7 @@ def test_eval_runner_can_use_expected_sources_when_chunk_ids_are_absent(tmp_path
 def test_eval_runner_uses_llm_to_generate_answer_for_evaluators(tmp_path: Path) -> None:
     test_set_path = tmp_path / "golden.json"
     test_set_path.write_text(
-        json.dumps({"test_cases": [{"query": "q", "expected_chunk_ids": ["chunk-a"]}]}),
+        json.dumps({"test_cases": [{"question": "q", "reference": "reference", "expected_chunk_ids": ["chunk-a"]}]}),
         encoding="utf-8",
     )
     search = FakeHybridSearch({"q": [make_result("chunk-a", "docs/manual.pdf")]})
@@ -161,9 +167,46 @@ def test_eval_runner_uses_llm_to_generate_answer_for_evaluators(tmp_path: Path) 
 
     report = runner.run(test_set_path)
 
-    assert report.results[0].generated_answer == "generated answer"
-    assert evaluator.calls[0]["trace"] == {"generated_answer": "generated answer", "contexts": ["text for chunk-a"]}
+    assert report.results[0].answer == "generated answer"
+    assert evaluator.calls[0]["trace"] == {
+        "answer": "generated answer",
+        "contexts": ["text for chunk-a"],
+        "reference": "reference",
+    }
     assert llm.messages[0][1]["content"].startswith("问题：q")
+
+
+def test_eval_runner_can_use_precomputed_ragas_sample_without_search(tmp_path: Path) -> None:
+    test_set_path = tmp_path / "golden.json"
+    test_set_path.write_text(
+        json.dumps(
+            {
+                "test_cases": [
+                    {
+                        "question": "q",
+                        "answer": "precomputed answer",
+                        "contexts": ["precomputed context"],
+                        "reference": "reference",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    search = FakeHybridSearch({})
+    evaluator = RecordingEvaluator()
+    runner = EvalRunner(make_settings(), search, evaluator)  # type: ignore[arg-type]
+
+    report = runner.run(test_set_path)
+
+    assert search.calls == []
+    assert report.results[0].answer == "precomputed answer"
+    assert report.results[0].contexts == ["precomputed context"]
+    assert evaluator.calls[0]["trace"] == {
+        "answer": "precomputed answer",
+        "contexts": ["precomputed context"],
+        "reference": "reference",
+    }
 
 
 def test_eval_runner_rejects_invalid_test_set(tmp_path: Path) -> None:
