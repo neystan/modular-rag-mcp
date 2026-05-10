@@ -9,6 +9,10 @@
 - [项目概述](#-项目概述)
 - [分支说明](#-分支说明)
 - [快速开始](#-快速开始)
+- [配置说明](#-配置说明)
+- [MCP 配置示例](#-mcp-配置示例)
+- [Dashboard 使用指南](#-dashboard-使用指南)
+- [运行测试](#-运行测试)
 - [谁适合用这个项目 & 怎么用](#-谁适合用这个项目--怎么用)
 - [简历参考](#-简历参考)
 - [常见问题](#-常见问题)
@@ -101,26 +105,285 @@
 
 ## 🚀 快速开始
 
-### 1. 克隆项目
+### 1. 克隆项目并进入目录
 
 ```bash
 git clone <repo-url>
-cd Modular-RAG-MCP-Server
+cd MODULAR-RAG-MCP
 ```
 
-### 2. 一键配置（Setup Skill）
+### 2. 安装依赖
 
-本项目提供了 **Setup Skill** 一键完成所有环境配置，包括：Provider 选择 → API Key 配置 → 依赖安装 → 配置文件生成 → Dashboard 启动。
+推荐使用 `uv`：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
+```
+
+如果你已经安装了 `uv`，直接执行：
+
+```bash
+uv sync
+```
+
+### 3. 准备配置
+
+项目默认读取 `config/settings.yaml`。运行前至少确认：
+
+- `llm.provider` / `llm.model`
+- `embedding.provider` / `embedding.model`
+- `vector_store.provider` / `vector_store.persist_path`
+- `retrieval.top_k`
+- `rerank.provider`
+- `evaluation.provider`
+
+建议不要把真实 `api_key` 提交到仓库。开发时可先写本地配置，提交前再改成环境变量注入。
+
+### 4. 摄取示例数据
+
+```bash
+uv run python scripts/ingest.py \
+  --path tests/fixtures/sample_documents/ \
+  --collection demo
+```
+
+### 5. 执行一次查询
+
+```bash
+uv run python scripts/query.py \
+  --query "What is Modular RAG?" \
+  --collection demo \
+  --verbose
+```
+
+### 6. 启动 Dashboard
+
+```bash
+uv run python scripts/start_dashboard.py
+```
+
+### 7. 启动 MCP Server
+
+```bash
+uv run python scripts/start_mcp_server.py
+```
+
+### 8. 运行评估
+
+```bash
+uv run python scripts/evaluate.py \
+  --test-set tests/fixtures/golden_test_set.json
+```
+
+### 9. 可选：一键配置（Setup Skill）
+
+本项目提供了 **Setup Skill** 一键完成 Provider 选择、API Key 配置、依赖安装、配置文件生成和 Dashboard 启动。
 
 在 VS Code 中打开项目，通过 Copilot / Claude 对话框输入：
 
-```
+```text
 setup
 ```
 
-Agent 会自动引导你完成全部配置流程。
+Agent 会自动引导你完成全部配置流程；如果你想完全手动控制环境，也可以直接按上面的 CLI 步骤走通。
 
-> 💡 如果不熟悉 Skill 的使用方式，请观看配套笔记中的 **Setup Skill 使用讲解视频**。
+---
+
+## ⚙️ 配置说明
+
+`config/settings.yaml` 当前主要包含这些部分：
+
+```yaml
+app:
+  name: modular-rag-mcp
+  environment: local
+
+llm:
+  provider: qwen
+  model: kimi-k2.5
+
+vision_llm:
+  provider: qwen
+  model: kimi-k2.5
+
+embedding:
+  provider: qwen
+  model: text-embedding-v4
+
+splitter:
+  provider: recursive
+  chunk_size: 500
+  chunk_overlap: 100
+
+vector_store:
+  provider: chroma
+  collection: default
+  persist_path: data/db/chroma
+
+retrieval:
+  top_k: 3
+  mode: hybrid
+
+rerank:
+  provider: qwen
+  model: qwen3-rerank
+
+evaluation:
+  provider: ragas
+  enabled: true
+```
+
+各字段作用：
+
+- `app`：项目名和环境标记。
+- `llm`：回答生成、评估生成等文本模型配置。
+- `vision_llm`：图片理解与图生文配置。
+- `embedding`：向量编码模型配置。
+- `splitter`：切块策略和参数。
+- `vector_store`：向量库 provider、collection 和持久化路径。
+- `retrieval`：检索层参数，比如 `top_k`、检索模式。
+- `rerank`：重排模型配置。
+- `evaluation`：评估后端，支持 `custom`、`ragas` 或 `backends` 组合。
+- `observability`：日志配置。
+- `ingestion`：摄取增强开关，如 `chunk_refiner`、`metadata_enricher`、`image_captioner`。
+
+---
+
+## 🔌 MCP 配置示例
+
+### GitHub Copilot `mcp.json`
+
+```json
+{
+  "servers": {
+    "modular-rag-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "scripts/start_mcp_server.py"]
+    }
+  }
+}
+```
+
+### Claude Desktop `claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "modular-rag-mcp": {
+      "command": "uv",
+      "args": ["run", "python", "scripts/start_mcp_server.py"],
+      "cwd": "/absolute/path/to/MODULAR-RAG-MCP"
+    }
+  }
+}
+```
+
+当前 MCP Server 暴露的核心工具：
+
+- `query_knowledge_hub`
+- `list_collections`
+- `get_document_summary`
+
+---
+
+## 🖥️ Dashboard 使用指南
+
+启动命令：
+
+```bash
+uv run python scripts/start_dashboard.py
+```
+
+页面说明：
+
+- `系统总览`：查看当前 provider、模型、向量库路径和数据资产统计。
+- `数据浏览器`：查看已摄入文档、chunk 和图片详情。
+- `Ingestion 管理`：上传 PDF、触发摄取、删除文档。
+- `Ingestion 追踪`：查看摄取阶段耗时和 trace 细节。
+- `Query 追踪`：查看 Dense / Sparse / Fusion / Rerank 的变化。
+- `评估面板`：运行 golden test set，查看进度条、历史记录和各 case 指标。
+
+推荐操作顺序：
+
+1. 先在 `Ingestion 管理` 上传或摄取文档。
+2. 到 `数据浏览器` 确认文档和 chunk 已入库。
+3. 通过 CLI 或 `Query 追踪` 验证查询链路。
+4. 最后在 `评估面板` 跑 `custom` 或 `ragas` 评估。
+
+---
+
+## 🧪 运行测试
+
+### 单元测试
+
+```bash
+uv run pytest -q tests/unit
+```
+
+### 集成测试
+
+```bash
+uv run pytest -q tests/integration
+```
+
+### E2E 测试
+
+```bash
+uv run pytest -q tests/e2e
+```
+
+### 全量测试
+
+```bash
+uv run pytest -q
+```
+
+几个关键测试入口：
+
+```bash
+uv run pytest -q tests/e2e/test_mcp_client.py
+uv run pytest -q tests/e2e/test_dashboard_smoke.py
+uv run pytest -q tests/unit/test_ragas_evaluator.py
+uv run pytest -q tests/unit/test_dashboard_evaluation_panel.py
+```
+
+---
+
+## ❓常见问题
+
+### 1. API Key 放在哪里？
+
+本地开发可以直接写在 `config/settings.yaml`，但不建议提交。更稳妥的做法是改成环境变量注入。
+
+### 2. ingest 成功了，但 query 没结果？
+
+优先检查：
+
+- `--collection` 是否和摄取时一致
+- `vector_store.persist_path` 是否一致
+- `retrieval.top_k` 是否过小
+- `embedding` / `rerank` provider 是否配置错误
+
+### 3. Dashboard 评估很慢怎么办？
+
+`ragas` 会多次调用 LLM 和 embedding，比纯检索回归测试慢很多。建议先减少 case 数量，再逐步放大。
+
+### 4. `ragas` 缺依赖怎么办？
+
+```bash
+uv add ragas datasets
+```
+
+### 5. MCP Client 连接失败怎么办？
+
+优先检查：
+
+- `uv` 是否可用
+- MCP 配置里的 `cwd` 是否正确
+- `scripts/start_mcp_server.py` 是否能单独启动
+- 客户端是否支持 stdio 模式
 
 ---
 

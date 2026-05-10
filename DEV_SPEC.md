@@ -2058,7 +2058,7 @@ dashboard:
 |---------|---------|------|---------|------|
 | I1 | E2E：MCP Client 侧调用模拟 | [x] | 2026-05-10 | 新增 `tests/e2e/test_mcp_client.py`，子进程启动 MCP server，覆盖 initialize / tools/list / tools/call |
 | I2 | E2E：Dashboard 冒烟测试 | [x] | 2026-05-10 | 新增 `tests/e2e/test_dashboard_smoke.py`，使用 Streamlit `AppTest` 覆盖 6 个页面渲染与无异常冒烟校验 |
-| I3 | 完善 README（运行说明 + MCP + Dashboard） | [ ] | | |
+| I3 | 完善 README（运行说明 + MCP + Dashboard） | [x] | 2026-05-10 | README 已补齐快速开始、配置说明、MCP 配置示例、Dashboard 使用指南、测试命令与常见问题 |
 | I4 | 清理接口一致性（契约测试补齐） | [ ] | | |
 | I5 | 全链路 E2E 验收 | [ ] | | |
 
@@ -2076,8 +2076,8 @@ dashboard:
 | 阶段 F | 5 | 5 | 100% |
 | 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 5 | 100% |
-| 阶段 I | 5 | 2 | 40% |
-| **总计** | **69** | **66** | **96%** |
+| 阶段 I | 5 | 3 | 60% |
+| **总计** | **69** | **67** | **97%** |
 
 ---
 
