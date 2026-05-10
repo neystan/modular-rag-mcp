@@ -118,3 +118,18 @@ def test_factory_creates_qwen_reranker() -> None:
     )
 
     assert isinstance(reranker, QwenReranker)
+
+
+def test_register_provider_requires_non_empty_name() -> None:
+    with pytest.raises(RerankerFactoryError, match="名称不能为空"):
+        RerankerFactory.register_provider("   ", ReverseReranker)
+
+
+def test_create_requires_settings_or_dict() -> None:
+    with pytest.raises(RerankerFactoryError, match="settings 必须是 Settings 或 dict"):
+        RerankerFactory.create("bad-settings")  # type: ignore[arg-type]
+
+
+def test_create_requires_rerank_mapping() -> None:
+    with pytest.raises(RerankerFactoryError, match="mapping/object: rerank"):
+        RerankerFactory.create({"rerank": "none"})  # type: ignore[arg-type]

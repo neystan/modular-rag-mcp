@@ -54,6 +54,35 @@ class FakeVectorStore(BaseVectorStore):
         ]
         return sorted(results, key=lambda item: item.score, reverse=True)[:top_k]
 
+    def get_by_ids(self, ids: list[str], trace: Any | None = None) -> list[dict[str, Any]]:
+        del trace
+        normalized_ids = [str(item).strip() for item in ids if str(item).strip()]
+        return [
+            {
+                "id": record.id,
+                "text": record.text,
+                "metadata": dict(record.metadata),
+            }
+            for item_id in normalized_ids
+            if (record := self.records.get(item_id)) is not None
+        ]
+
+
+class QueryOnlyVectorStore(BaseVectorStore):
+    def upsert(self, records: list[VectorRecord], trace: Any | None = None) -> int:
+        del records, trace
+        return 0
+
+    def query(
+        self,
+        vector: list[float],
+        top_k: int,
+        filters: dict[str, Any] | None = None,
+        trace: Any | None = None,
+    ) -> list[VectorQueryResult]:
+        del vector, top_k, filters, trace
+        return []
+
 
 class NotVectorStore:
     pass
@@ -109,6 +138,30 @@ def test_upsert_and_query_contract() -> None:
     assert results[0].metadata["collection"] == "test"
 
 
+def test_get_by_ids_preserves_requested_order() -> None:
+    store = FakeVectorStore({"collection": "test"})
+    store.upsert(
+        [
+            VectorRecord(id="a", vector=[1.0], text="文本 A", metadata={}),
+            VectorRecord(id="b", vector=[2.0], text="文本 B", metadata={}),
+        ]
+    )
+
+    results = store.get_by_ids(["b", "missing", "a"])
+
+    assert results == [
+        {"id": "b", "text": "文本 B", "metadata": {}},
+        {"id": "a", "text": "文本 A", "metadata": {}},
+    ]
+
+
+def test_base_vector_store_get_by_ids_raises_when_not_overridden() -> None:
+    store = QueryOnlyVectorStore()
+
+    with pytest.raises(NotImplementedError, match="get_by_ids"):
+        store.get_by_ids(["a"])
+
+
 def test_register_provider_and_create_from_settings() -> None:
     VectorStoreFactory.register_provider("fake", FakeVectorStore)
 
@@ -142,3 +195,8 @@ def test_missing_provider_reports_config_path() -> None:
 def test_register_provider_requires_basevectorstore_subclass() -> None:
     with pytest.raises(VectorStoreFactoryError, match="必须继承 BaseVectorStore"):
         VectorStoreFactory.register_provider("bad", NotVectorStore)  # type: ignore[arg-type]
+
+
+def test_create_requires_settings_or_dict() -> None:
+    with pytest.raises(VectorStoreFactoryError, match="settings 必须是 Settings 或 dict"):
+        VectorStoreFactory.create("bad-settings")  # type: ignore[arg-type]

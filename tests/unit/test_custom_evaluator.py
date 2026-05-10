@@ -83,6 +83,14 @@ def test_custom_evaluator_handles_empty_inputs() -> None:
     assert evaluator.evaluate("query", ["doc-a"], []) == {"hit_rate": 0.0, "mrr": 0.0}
 
 
+def test_custom_evaluator_ignores_duplicate_golden_ids() -> None:
+    evaluator = CustomEvaluator()
+
+    metrics = evaluator.evaluate("query", ["doc-a", "doc-b"], ["doc-b", "doc-b"])
+
+    assert metrics == {"hit_rate": 1.0, "mrr": 0.5}
+
+
 def test_factory_creates_custom_evaluator_by_default() -> None:
     evaluator = EvaluatorFactory.create(make_settings())
 
@@ -127,3 +135,18 @@ def test_missing_provider_reports_config_path() -> None:
 def test_register_provider_requires_baseevaluator_subclass() -> None:
     with pytest.raises(EvaluatorFactoryError, match="必须继承 BaseEvaluator"):
         EvaluatorFactory.register_provider("bad", NotEvaluator)  # type: ignore[arg-type]
+
+
+def test_register_provider_requires_non_empty_name() -> None:
+    with pytest.raises(EvaluatorFactoryError, match="名称不能为空"):
+        EvaluatorFactory.register_provider("   ", ConstantEvaluator)
+
+
+def test_create_requires_settings_or_dict() -> None:
+    with pytest.raises(EvaluatorFactoryError, match="settings 必须是 Settings 或 dict"):
+        EvaluatorFactory.create("bad-settings")  # type: ignore[arg-type]
+
+
+def test_create_requires_evaluation_mapping() -> None:
+    with pytest.raises(EvaluatorFactoryError, match="mapping/object: evaluation"):
+        EvaluatorFactory.create({"evaluation": "custom"})  # type: ignore[arg-type]
